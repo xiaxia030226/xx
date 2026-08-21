@@ -81,14 +81,15 @@ Game/
 ├── Query/
 │   └── (按需新增，如查询当前武器伤害)
 ├── Entity/
-│   ├── Player.cs                # 玩家：WASD 移动、朝向
+│   ├── Player.cs                # 玩家：WASD 移动、鼠标朝向、左键攻击
 │   ├── Enemy.cs                 # 敌人：追击 AI（阶段二）
 │   ├── ExperienceCrystal.cs     # 经验水晶：吸附拾取（阶段三）
 │   └── Weapons/
-│       ├── WeaponBase.cs        # 武器抽象基类：攻击间隔、伤害来源
-│       └── SwordWeapon.cs       # 铁剑：面前扇形横扫（阶段二）
+│       ├── WeaponBase.cs        # 武器抽象基类：弹药/能量/冷却、攻击逻辑
+│       └── SwordWeapon.cs       # 铁剑：能量制近战，左键扇形横扫（阶段二）
 └── View/
-    ├── GameHUD.cs               # 战斗 HUD：血条、经验条、波次（阶段一）
+    ├── GameHUD.cs               # 战斗 HUD：血条、经验条、波次、武器格子（阶段一）
+    ├── WeaponBarHUD.cs           # 屏幕下方武器格子 1-9（阶段二）
     ├── LevelUpPanel.cs          # 升级 3 选 1（阶段三）
     ├── MainMenuPanel.cs         # 主菜单（阶段四）
     ├── CharacterSelectPanel.cs  # 选角色（阶段四）
@@ -140,16 +141,16 @@ public class GameArchitecture : Architecture<GameArchitecture>
 
 ### 实体层协作方式
 
-- **Player**（Controller）：每帧读输入移动；碰撞处理通过 `OnTriggerEnter` 收到伤害信号后发送 `PlayerTakeDamageCommand`
+- **Player**（Controller）：每帧读 WASD 输入移动，鼠标控制朝向；碰撞处理通过 `OnTriggerEnter` 收到伤害信号后发送 `PlayerTakeDamageCommand`
 - **Enemy**（阶段二）：`Update` 中向玩家方向移动；由 `EnemySpawnSystem` 定时生成
-- **WeaponBase**：持有攻击间隔、伤害数值，子类实现 `Attack()`；由 `WeaponSystem` 统一调度触发
+- **WeaponBase**：持有弹药/能量上限、当前值、冷却时间、伤害数值；子类实现 `Attack()`；由 `WeaponSystem` 管理切换与冷却
 - **ExperienceCrystal**（阶段三）：敌人死亡时由敌人发送事件触发生成；玩家靠近时加速吸附
 
 ### View 层清单
 
 | 面板 | 打开时机 | 内容 |
 |------|----------|------|
-| GameHUD | 战斗开始 | 血条、经验条、当前波次（纯代码创建 UI 元素） |
+| GameHUD | 战斗开始 | 血条、经验条、当前波次、武器格子（纯代码创建 UI 元素） |
 | LevelUpPanel | 升级时 | 3 选 1（武器升级 / 新武器 / 被动） |
 | MainMenuPanel | 启动 | 开始游戏、天赋入口 |
 | CharacterSelectPanel | 主菜单 → 开始 | 4 角色选择 |
@@ -167,11 +168,11 @@ public class GameArchitecture : Architecture<GameArchitecture>
 
 1. `GameArchitecture.cs`：注册 PlayerModel、GameStateModel
 2. `GameRoot.cs`：Awake 初始化架构；代码创建地面（Plane）、玩家（Cube 占位）、正交摄像机跟随逻辑
-3. `Player.cs`：WASD 八方向移动
+3. `Player.cs`：WASD 八方向移动，鼠标控制朝向（始终面向鼠标位置）
 4. `GameHUD.cs`：`UIKit.OpenPanel<GameHUD>()` 打开；OnInit 中代码创建 HP 文本；订阅 `PlayerModel.HP` 变化自动刷新
 5. 临时测试：按空格键发送扣血 Command，验证 HP → HUD 的整条数据链路
 
-**验证**：Play 后方块随 WASD 移动；按空格 HP 减少且 HUD 文本实时变化；无报错。
+**验证**：Play 后方块随 WASD 移动，鼠标控制朝向；按空格 HP 减少且 HUD 文本实时变化；无报错。
 
 ### 阶段二：敌人 + 战斗闭环（第二个里程碑）
 
@@ -179,11 +180,11 @@ public class GameArchitecture : Architecture<GameArchitecture>
 
 1. `Enemy.cs`：Sphere 占位，向玩家直线追击；触碰玩家发送 `PlayerTakeDamageCommand`
 2. `EnemyModel` + `EnemySpawnSystem`：按波次表定时生成（波次 1：8 只史莱姆参数）；全灭进入下一波
-3. `SwordWeapon.cs`（铁剑）：自动攻击，每 1.5 秒对面前 120° 扇形内敌人造成伤害
+3. `SwordWeapon.cs`（铁剑）：能量制近战（100 能量，每次消耗 30，每秒恢复 30），左键点击/长按攻击，能量耗尽自动切换
 4. `EnemyTakeDamageCommand`：敌人 HP 归零 → 销毁 + 击杀数 +1 + 发送死亡事件
-5. GameHUD 增加波次显示与敌人击杀数
+5. GameHUD 增加波次显示、武器格子、敌人击杀数
 
-**验证**：敌人持续生成并追击；铁剑能扫杀进入范围的敌人；敌人触碰后玩家血条下降；清空一波后自动刷下一波。
+**验证**：敌人持续生成并追击；鼠标左键攻击铁剑，能量耗尽自动切换；敌人触碰后玩家血条下降；清空一波后自动刷下一波。
 
 ### 阶段三：经验 + 升级系统（第三个里程碑）
 
@@ -221,8 +222,8 @@ public class GameArchitecture : Architecture<GameArchitecture>
 
 | 阶段 | 验收一句话标准 |
 |------|----------------|
-| 一 | WASD 移动 + HUD 实时显示 HP，数据链路完整 |
-| 二 | 敌人追击、铁剑扫杀、玩家掉血，波次自动推进 |
+| 一 | WASD 移动 + 鼠标朝向 + HUD 实时显示 HP，数据链路完整 |
+| 二 | 敌人追击、左键攻击铁剑、能量耗尽自动切换、玩家掉血，波次自动推进 |
 | 三 | 杀怪 → 吸水晶 → 升级 3 选 1 → 变强，成长闭环成立 |
 | 四 | 完整流程可循环游玩，金币跨局保留 |
 
