@@ -6,6 +6,7 @@ using QFramework;
 /// </summary>
 public class GameUIKitConfig : UIKitConfig
 {
+    // Resources.Load 使用相对 Resources 文件夹且不带扩展名的路径。
     private const string PanelPathPrefix = "UI/";
 
     public override IPanel LoadPanel(PanelSearchKeys panelSearchKeys)
@@ -20,6 +21,10 @@ public class GameUIKitConfig : UIKitConfig
         base.LoadPanelAsync(panelSearchKeys, onPanelLoad);
     }
 
+    /// <summary>
+    /// 未手动传 prefabName 时，使用面板类型名自动补出 Resources 加载路径。
+    /// 如果调用方已经指定 GameObjName，则尊重调用方的自定义路径。
+    /// </summary>
     private static void FillPrefabPath(PanelSearchKeys panelSearchKeys)
     {
         if (panelSearchKeys == null || panelSearchKeys.PanelType == null) return;

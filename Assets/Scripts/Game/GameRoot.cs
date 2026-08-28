@@ -2,6 +2,10 @@ using Game.UI;
 using QFramework;
 using UnityEngine;
 
+/// <summary>
+/// 当前阶段的场景启动入口。
+/// 负责初始化输入和架构、搭建测试环境，并打开战斗 HUD。
+/// </summary>
 public class GameRoot : MonoBehaviour, IController
 {
     public static Transform BattleRoot { get; private set; }
@@ -11,18 +15,21 @@ public class GameRoot : MonoBehaviour, IController
 
     private void Awake()
     {
+        // 先初始化输入和架构，后续创建的 Player、Command 与 HUD 才能访问对应对象。
         GameInput.Init();
-
         _ = GameArchitecture.Interface;
 
+        // 用项目配置替换 UIKit 默认配置，让面板类型自动映射到 Resources/UI 路径。
         UIKit.Config = new GameUIKitConfig();
 
         CreateDirectionalLight();
 
+        // 阶段一暂时用代码生成测试场景，后续可替换为正式关卡预制体。
         CreateBattleEnvironment();
         PlayerInstance = CreatePlayer();
         CreateMainCamera(PlayerInstance.transform);
 
+        // GameUIKitConfig 会把 GameHUD 映射到 Resources/UI/GameHUD.prefab。
         UIKit.OpenPanel<GameHUD>();
 
         RegisterDebugKeys();
@@ -88,6 +95,7 @@ public class GameRoot : MonoBehaviour, IController
         playerObj.GetComponent<Renderer>().material.color = new Color(0.3f, 0.55f, 0.85f);
 
         var rb = playerObj.AddComponent<Rigidbody>();
+        // Player 直接修改 Transform，因此刚体只参与触发器检测，不接受物理系统推动。
         rb.isKinematic = true;
         rb.constraints = RigidbodyConstraints.FreezeRotation;
 
@@ -122,6 +130,10 @@ public class GameRoot : MonoBehaviour, IController
         follow.Target = target;
     }
 
+    /// <summary>
+    /// 注册阶段一数据链路测试键：K 扣血、H 回血。
+    /// 只在编辑器和 Development Build 中编译，不进入正式发布包。
+    /// </summary>
     private void RegisterDebugKeys()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
