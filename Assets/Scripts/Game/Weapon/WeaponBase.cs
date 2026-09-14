@@ -35,8 +35,13 @@ public abstract class WeaponBase
     public float Damage { get; private set; }
     public WeaponState State { get; private set; } = WeaponState.Ready;
 
+    // IsAutomatic：true 表示长按连发（机枪），false 表示点击单发（手枪）。
+    // Player 读取它决定用 IsPressed 还是 WasPressedThisFrame 驱动攻击。
+    public bool IsAutomatic { get; }
+
     protected WeaponBase(string id, string name, WeaponResourceType resourceType, float resourceMax,
-        float costPerAttack, float regenPerSec, float refillCooldown, float attackInterval, float damage)
+        float costPerAttack, float regenPerSec, float refillCooldown, float attackInterval, float damage,
+        bool isAutomatic)
     {
         Id = id;
         Name = name;
@@ -48,6 +53,7 @@ public abstract class WeaponBase
         RefillCooldown = refillCooldown;
         AttackInterval = attackInterval;
         Damage = damage;
+        IsAutomatic = isAutomatic;
     }
 
     /// <summary>升级：伤害提升。供升级三选一调用。</summary>
@@ -90,7 +96,7 @@ public abstract class WeaponBase
 
     /// <summary>
     /// 每帧推进攻击冷却，并根据资源类型执行能量恢复或弹药装填。
-    /// virtual：子类（如 SwordWeapon）可 override 追加自身表现逻辑（如挥剑特效的隐藏倒计时），
+    /// virtual：子类可 override 追加自身表现逻辑（如挥剑特效的隐藏倒计时），
     /// 重写时必须调用 base.Tick 保证冷却与资源恢复不丢失。
     /// </summary>
     public virtual void Tick(float deltaTime)

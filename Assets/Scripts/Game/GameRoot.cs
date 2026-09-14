@@ -18,6 +18,9 @@ public partial class GameRoot : MonoBehaviour, IController
     // mPickupRoot：拾取物（经验水晶）的父节点，保持场景层级整洁。
     private Transform mPickupRoot;
 
+    // mBulletRoot：子弹的父节点，由 CreateBattleEnvironment 创建，装配武器系统时传入。
+    private Transform mBulletRoot;
+
     // mEnemySpawnSystem：刷怪系统缓存，每帧调用 Tick 推进波次。
     private IEnemySpawnSystem mEnemySpawnSystem;
 
@@ -154,9 +157,9 @@ public partial class GameRoot : MonoBehaviour, IController
         // enemyRoot：场景中敌人挂载的父节点，由 CreateBattleEnvironment 创建。
         var enemyRoot = BattleRoot.Find("EnemyRoot");
 
-        // Setup：刷怪系统记录玩家位置作为生成参照，武器系统记录攻击者。
+        // Setup：刷怪系统记录玩家位置作为生成参照；武器系统记录攻击者与子弹挂载点。
         mEnemySpawnSystem.Setup(PlayerInstance.transform, enemyRoot);
-        mWeaponSystem.Setup(PlayerInstance.transform);
+        mWeaponSystem.Setup(PlayerInstance.transform, mBulletRoot);
 
         // 注册经验水晶对象池：预创建 16 个隐藏水晶，拾取与掉落循环复用、永不销毁。
         this.GetSystem<IGameObjectPoolSystem>().Register("exp_crystal", CreateExpCrystal, 16);

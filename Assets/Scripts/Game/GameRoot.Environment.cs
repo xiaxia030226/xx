@@ -46,10 +46,10 @@ public partial class GameRoot
         ground.transform.localScale = new Vector3(10f, 1f, 10f);
         ground.GetComponent<Renderer>().material.color = new Color(0.22f, 0.25f, 0.28f);
 
-        // 创建三个功能挂点：EnemyRoot 挂敌人、PickupRoot 挂水晶、BulletRoot 留待将来挂子弹。
+        // 创建三个功能挂点：EnemyRoot 挂敌人、PickupRoot 挂水晶、BulletRoot 挂子弹。
         CreateChild(root.transform, "EnemyRoot");
         mPickupRoot = CreateChild(root.transform, "PickupRoot");
-        CreateChild(root.transform, "BulletRoot");
+        mBulletRoot = CreateChild(root.transform, "BulletRoot");
 
         // 四面围墙：每面长 102 米，高 1 米，厚 1 米，灰色。
         CreateBoundaryWall(root.transform, "WallNorth", new Vector3(0f, 0.5f, 50f), new Vector3(102f, 1f, 1f));

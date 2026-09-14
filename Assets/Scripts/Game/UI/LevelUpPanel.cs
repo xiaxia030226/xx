@@ -31,12 +31,12 @@ namespace Game.UI
 		/// </summary>
 		protected override void OnOpen(IUIData uiData = null)
 		{
-			// weapon：当前玩家持有的第一把（也是唯一一把）武器，升级直接作用在它身上。
-			var weapon = this.GetSystem<IWeaponSystem>().Weapons[0];
+			// weapon：当前手持的武器，升级强化直接作用在它身上。
+			var weapon = this.GetSystem<IWeaponSystem>().CurrentWeapon;
 
 			// 依次刷新三个选项的文字与点击回调。
-			BindOption(Option1, Option1Label, "铁剑伤害 +5", () => weapon.UpgradeDamage(5f));
-			BindOption(Option2, Option2Label, "铁剑能量上限 +20", () => weapon.UpgradeResource(20f));
+			BindOption(Option1, Option1Label, "当前武器伤害 +5", () => weapon.UpgradeDamage(5f));
+			BindOption(Option2, Option2Label, "当前武器弹夹 +10", () => weapon.UpgradeResource(10f));
 			BindOption(Option3, Option3Label, "恢复 30 生命", () => this.SendCommand(new PlayerHealCommand(30)));
 		}
 

@@ -93,12 +93,22 @@ public class Player : MonoBehaviour, IController
     }
 
     /// <summary>
-    /// 左键按住期间每帧尝试攻击。
-    /// 是否真的挥出由武器自身的攻击间隔决定，因此"点击"打一下，"长按"按攻速连续攻击。
+    /// 按当前武器的触发方式处理攻击输入：
+    /// 非自动武器（手枪）用 WasPressedThisFrame——按下瞬间只发一次；
+    /// 自动武器（机枪）用 IsPressed——长按期间每帧尝试，射速由武器攻击间隔限制。
     /// </summary>
     private void HandleAttack()
     {
-        if (GameInput.Attack.IsPressed())
+        // weapon：当前手持武器；尚未初始化完成时本帧不处理攻击。
+        var weapon = GetWeaponSystem().CurrentWeapon;
+        if (weapon == null) return;
+
+        // triggered：本帧是否触发了攻击输入，按武器类型选择检测方式。
+        var triggered = weapon.IsAutomatic
+            ? GameInput.Attack.IsPressed()
+            : GameInput.Attack.WasPressedThisFrame();
+
+        if (triggered)
         {
             GetWeaponSystem().TryAttackCurrent();
         }

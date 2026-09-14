@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7ee5695ffcf77648a2055e8afa145c9, type: 3}
+  m_Name: MachineGun
+  m_EditorClassIdentifier: 
+  mId: machinegun
+  mName: 普通机枪
+  mMagazine: 50
+  mReloadTime: 2.5
+  mDamage: 6
+  mRoundsPerMinute: 600
+  mIsAutomatic: 1
+  mBulletId: bullet_normal
