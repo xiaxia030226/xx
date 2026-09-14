@@ -90,8 +90,10 @@ public abstract class WeaponBase
 
     /// <summary>
     /// 每帧推进攻击冷却，并根据资源类型执行能量恢复或弹药装填。
+    /// virtual：子类（如 SwordWeapon）可 override 追加自身表现逻辑（如挥剑特效的隐藏倒计时），
+    /// 重写时必须调用 base.Tick 保证冷却与资源恢复不丢失。
     /// </summary>
-    public void Tick(float deltaTime)
+    public virtual void Tick(float deltaTime)
     {
         mAttackCooldown = Mathf.Max(0f, mAttackCooldown - deltaTime);
 

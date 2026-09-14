@@ -1,59 +1,27 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 /// <summary>
-/// 敌人 AI 行为类型。配置只保存类型，Enemy 再根据类型执行对应行为。
-/// </summary>
-public enum EnemyAIType
-{
-    // 直线追向玩家，进入攻击范围后停下并进行近战接触伤害。
-    ChaseMelee
-}
-
-/// <summary>
-/// 单种敌人的静态参数。
-/// </summary>
-public sealed class EnemyConfig
-{
-    public string Id { get; }
-    public string Name { get; }
-    public int MaxHP { get; }
-    public float MoveSpeed { get; }
-    public int ContactDamage { get; }
-    public float AttackInterval { get; }
-    public int ExpValue { get; }
-    public EnemyAIType AIType { get; }
-    public float AttackRange { get; }
-
-    public EnemyConfig(string id, string name, int maxHP, float moveSpeed, int contactDamage,
-        float attackInterval, int expValue, EnemyAIType aiType, float attackRange)
-    {
-        Id = id;
-        Name = name;
-        MaxHP = maxHP;
-        MoveSpeed = moveSpeed;
-        ContactDamage = contactDamage;
-        AttackInterval = attackInterval;
-        ExpValue = expValue;
-        AIType = aiType;
-        AttackRange = attackRange;
-    }
-}
-
-/// <summary>
-/// 阶段二敌人配置表。后续增加敌人时只需继续向字典添加配置。
+/// 敌人配置查询表。配置数据以 ScriptableObject 资产的形式存放在
+/// Resources/Configs/Enemies/ 文件夹下，首次访问时一次性加载填充。
+/// 新增敌人：在该文件夹右键 Create → Game → 敌人配置，填好字段即可，代码零改动。
 /// </summary>
 public static class EnemyConfigTable
 {
+    // SlimeGreenId：绿史莱姆的 id 约定常量，波次表（代码配置）引用它指定生成哪种敌人。
     public const string SlimeGreenId = "slime_green";
 
-    private static readonly Dictionary<string, EnemyConfig> Configs = new Dictionary<string, EnemyConfig>
-    {
-        {
-            SlimeGreenId,
-            new EnemyConfig(SlimeGreenId, "绿史莱姆", 30, 2f, 10, 1f, 1,
-                EnemyAIType.ChaseMelee, 1f)
-        }
-    };
+    // ConfigsFolder：敌人配置资产在 Resources 下的相对文件夹路径。
+    private const string ConfigsFolder = "Configs/Enemies";
+
+    // sConfigs：懒加载的配置字典（敌人 id → 配置资产），首次访问时从 Resources 加载填充。
+    private static Dictionary<string, EnemyConfig> sConfigs;
+
+    // Configs：配置字典访问入口；sConfigs 为 null 时触发一次性加载。
+    private static Dictionary<string, EnemyConfig> Configs => sConfigs ??= LoadAll();
+
+    // AllIds：配置表中全部敌人 id 的只读集合，供刷怪系统遍历注册对象池。
+    public static IReadOnlyCollection<string> AllIds => Configs.Keys;
 
     /// <summary>
     /// 安全查询配置：找不到时返回 false，适合调用方自行处理缺失情况。
@@ -74,5 +42,28 @@ public static class EnemyConfigTable
         }
 
         return config;
+    }
+
+    /// <summary>
+    /// 从 Resources/Configs/Enemies 加载全部敌人配置资产并填入字典。
+    /// </summary>
+    private static Dictionary<string, EnemyConfig> LoadAll()
+    {
+        var configs = new Dictionary<string, EnemyConfig>();
+
+        foreach (var config in Resources.LoadAll<EnemyConfig>(ConfigsFolder))
+        {
+            // id 是字典的 key，重复时后加载的资产会覆盖先加载的，数据就乱了，因此直接报错提示。
+            if (configs.ContainsKey(config.Id))
+            {
+                Debug.LogError($"[EnemyConfig] 敌人 id 重复：{config.Id}（资产 {config.name}）");
+                continue;
+            }
+
+            configs[config.Id] = config;
+        }
+
+        Debug.Log($"[EnemyConfig] 已加载 {configs.Count} 个敌人配置");
+        return configs;
     }
 }

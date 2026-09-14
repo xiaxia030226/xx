@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using QFramework;
 using UnityEngine;
 
@@ -38,8 +39,8 @@ public class EnemySpawnSystem : AbstractSystem, IEnemySpawnSystem
     // WaitingNextWave：是否处于两波之间的等待间隔。
     private bool mWaitingNextWave;
 
-    // mGreenSlimePrefab：绿色史莱姆预制体缓存，首个实例化时从 Resources 加载一次，之后复用。
-    private GameObject mGreenSlimePrefab;
+    // mPrefabCache：敌人预制体缓存（敌人 id → 预制体）。每种敌人首次生成时从 Resources 加载一次，之后复用。
+    private readonly Dictionary<string, GameObject> mPrefabCache = new Dictionary<string, GameObject>();
 
     public void Setup(Transform player, Transform parent)
     {
@@ -108,24 +109,35 @@ public class EnemySpawnSystem : AbstractSystem, IEnemySpawnSystem
     private void RegisterEnemyPools()
     {
         var pool = this.GetSystem<IGameObjectPoolSystem>();
-        pool.Register(EnemyConfigTable.SlimeGreenId, CreateGreenSlime, 8);
+
+        // 遍历配置表注册全部敌人的对象池：每种敌人预热 8 个。
+        // 新增敌人只需在 EnemyConfigTable 中加一行配置，这里无需改动。
+        foreach (var enemyId in EnemyConfigTable.AllIds)
+        {
+            pool.Register(enemyId, () => CreateEnemy(enemyId), 8);
+        }
     }
 
     /// <summary>
-    /// 创建绿色史莱姆实例：改为从预制体实例化，预制体上已挂好 Enemy、Collider、Rigidbody 和材质。
-    /// 预制体缓存在 mGreenSlimePrefab 中，只加载一次避免重复 IO。
+    /// 通用敌人工厂：按敌人 id 从配置表取预制体路径，加载并缓存后实例化。
+    /// 预制体上已挂好 Enemy、Collider、Rigidbody 和材质，无需代码设置。
     /// </summary>
-    private GameObject CreateGreenSlime()
+    /// <param name="enemyId">敌人配置 id，同时作为对象池的 key。</param>
+    private GameObject CreateEnemy(string enemyId)
     {
-        // 首次调用时从 Resources/Prefabs/GreenSlime 加载预制体并缓存。
-        if (mGreenSlimePrefab == null)
+        // 第一步：取配置，从中读取预制体路径。
+        var config = EnemyConfigTable.Get(enemyId);
+
+        // 第二步：首次生成该类型敌人时，从 Resources 加载预制体并缓存，避免重复 IO。
+        if (!mPrefabCache.TryGetValue(enemyId, out var prefab))
         {
-            mGreenSlimePrefab = Resources.Load<GameObject>("Prefabs/GreenSlime");
+            prefab = Resources.Load<GameObject>(config.PrefabPath);
+            mPrefabCache[enemyId] = prefab;
         }
 
-        // 从预制体克隆新实例：Enemy 脚本、碰撞体、刚体、材质均已在预制体上配好，无需代码设置。
-        var enemyObject = Object.Instantiate(mGreenSlimePrefab);
-        enemyObject.name = "GreenSlime";
+        // 第三步：从预制体克隆新实例，命名为敌人配置名便于 Hierarchy 中辨认。
+        var enemyObject = Object.Instantiate(prefab);
+        enemyObject.name = config.Name;
         return enemyObject;
     }
 
