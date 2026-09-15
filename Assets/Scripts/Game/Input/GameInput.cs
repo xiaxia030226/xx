@@ -1,3 +1,4 @@
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
@@ -59,6 +60,17 @@ public static class GameInput
         DebugExp = new InputAction("DebugExp", InputActionType.Button, "<Keyboard>/l");
 
         EnableAll();
+
+        // 防御：编辑器中开启“触摸模拟”（Input Debugger 的 Simulate Touch Input From Mouse or Pen）
+        // 会禁用 Mouse 设备，导致游戏里鼠标位置和按键全部失效；这里强制关闭模拟并确保鼠标处于启用状态。
+        if (UnityEngine.InputSystem.EnhancedTouch.TouchSimulation.instance != null)
+        {
+            UnityEngine.InputSystem.EnhancedTouch.TouchSimulation.Disable();
+        }
+        if (Mouse.current != null && !Mouse.current.enabled)
+        {
+            InputSystem.EnableDevice(Mouse.current);
+        }
     }
 
     /// <summary>
