@@ -15,6 +15,7 @@ public class GameArchitecture : Architecture<GameArchitecture>
         RegisterModel<IPlayerModel>(new PlayerModel());
         RegisterModel<IGameStateModel>(new GameStateModel());
         RegisterModel<IEnemyModel>(new EnemyModel());
+        RegisterModel<IEconomyModel>(new EconomyModel());
 
         RegisterSystem<IGameObjectPoolSystem>(new GameObjectPoolSystem());
         RegisterSystem<IEnemySpawnSystem>(new EnemySpawnSystem());

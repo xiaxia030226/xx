@@ -140,9 +140,9 @@
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\PackageKit\Framework\Attributes\PackageKitIgnoreAttribute.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\SingletonKit\Scripts\Singleton.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\LinqHelpers.cs" />
-    <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ZipKit\ICSharpCode.SharpZipLib\Zip\Compression\Deflater.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\Interop\ProxyObjects\IProxyFactory.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\PackageKit\PackageManager\Utilities\ResultFormat.cs" />
+    <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ZipKit\ICSharpCode.SharpZipLib\Zip\Compression\Deflater.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\Execution\VM\Processor\Processor.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ActionKit\Scripts\ScreenTransition\ScreenTransitionInOut.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ActionKit\Scripts\Internal\Executor\MonoUpdateActionExecutor.cs" />
@@ -372,7 +372,6 @@
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\Interop\StandardDescriptors\ProxyUserDataDescriptor.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\Script.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\DataTypes\SymbolRef.cs" />
-    <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\DataTypes\DataType.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ZipKit\ICSharpCode.SharpZipLib\Lzw\LzwException.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\EventKit\EventTrigger\UI\OnUpdateSelectedEventTrigger.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\PackageKit\EditorKit\View\Framework\IMGUILayoutRoot.cs" />
@@ -380,6 +379,7 @@
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\PackageKit\Markdown\Renderer\MDRendererBlockQuote.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ZipKit\ICSharpCode.SharpZipLib\Tar\TarException.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\Tree\Lexer\TokenType.cs" />
+    <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\DataTypes\DataType.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\Errors\ScriptRuntimeException.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\PackageKit\Common\PackageSearchHelper.cs" />
     <Compile Include="Assets\Scripts\QFramework\Toolkits\_CoreKit\ScriptKit\MoonSharp\Interpreter\Compatibility\Frameworks\Base\FrameworkClrBase.cs" />

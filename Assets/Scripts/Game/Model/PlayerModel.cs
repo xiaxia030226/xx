@@ -12,6 +12,9 @@ public interface IPlayerModel : IModel
     BindableProperty<int> Level { get; }
     BindableProperty<int> Exp { get; }
     BindableProperty<int> ExpNeed { get; }
+
+    // Reset：开始新一局时把全部运行期数据恢复为初始值。
+    void Reset();
 }
 
 /// <summary>
@@ -26,6 +29,19 @@ public class PlayerModel : AbstractModel, IPlayerModel
     public BindableProperty<int> Level { get; } = new BindableProperty<int>(1);
     public BindableProperty<int> Exp { get; } = new BindableProperty<int>(0);
     public BindableProperty<int> ExpNeed { get; } = new BindableProperty<int>(5);
+
+    /// <summary>
+    /// 开始新一局时恢复全部初始值。Value 变化会自动通知 HUD 刷新，无需额外广播。
+    /// </summary>
+    public void Reset()
+    {
+        HP.Value = 100;
+        MaxHP.Value = 100;
+        MoveSpeed.Value = 5f;
+        Level.Value = 1;
+        Exp.Value = 0;
+        ExpNeed.Value = 5;
+    }
 
     /// <summary>
     /// Model 注册到架构时调用。当前数据已在字段声明处初始化，暂时无需额外处理。

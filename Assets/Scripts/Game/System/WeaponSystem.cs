@@ -52,19 +52,20 @@ public class WeaponSystem : AbstractSystem, IWeaponSystem
     {
         mOwner = owner;
 
-        if (mWeapons.Count == 0)
-        {
-            var pool = this.GetSystem<IGameObjectPoolSystem>();
+        // 跨场景重入时武器列表可能还留着上一局的实例（持有已销毁的挂载点引用），
+        // 先清空再装配，保证本局武器持有的是新场景的挂载点。
+        mWeapons.Clear();
 
-            // 第一步：注册子弹对象池。多把枪可能共用同一种子弹，注册前用集合去重。
-            var registeredBullets = new HashSet<string>();
-            RegisterBulletPool(pool, WeaponConfigTable.Get(WeaponConfigTable.PistolId), bulletParent, registeredBullets);
-            RegisterBulletPool(pool, WeaponConfigTable.Get(WeaponConfigTable.MachineGunId), bulletParent, registeredBullets);
+        var pool = this.GetSystem<IGameObjectPoolSystem>();
 
-            // 第二步：按配置装配两把枪，手枪在槽位 1，机枪在槽位 2。
-            mWeapons.Add(CreateGun(WeaponConfigTable.PistolId, pool, bulletParent));
-            mWeapons.Add(CreateGun(WeaponConfigTable.MachineGunId, pool, bulletParent));
-        }
+        // 第一步：注册子弹对象池。多把枪可能共用同一种子弹，注册前用集合去重。
+        var registeredBullets = new HashSet<string>();
+        RegisterBulletPool(pool, WeaponConfigTable.Get(WeaponConfigTable.PistolId), bulletParent, registeredBullets);
+        RegisterBulletPool(pool, WeaponConfigTable.Get(WeaponConfigTable.MachineGunId), bulletParent, registeredBullets);
+
+        // 第二步：按配置装配两把枪，手枪在槽位 1，机枪在槽位 2。
+        mWeapons.Add(CreateGun(WeaponConfigTable.PistolId, pool, bulletParent));
+        mWeapons.Add(CreateGun(WeaponConfigTable.MachineGunId, pool, bulletParent));
 
         CurrentIndex = 0;
 

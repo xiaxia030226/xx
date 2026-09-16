@@ -13,6 +13,10 @@ public interface IGameObjectPoolSystem : ISystem
     GameObject Spawn(string key, Vector3 position, Quaternion rotation, Transform parent = null);
     void Recycle(string key, GameObject instance);
     int GetCachedCount(string key);
+
+    // ClearAll：清空全部池并销毁缓存对象，切换场景重入时必须调用，
+    // 避免池里残留已随旧场景卸载的无效引用。
+    void ClearAll();
 }
 
 /// <summary>
@@ -71,6 +75,23 @@ public class GameObjectPoolSystem : AbstractSystem, IGameObjectPoolSystem
     public int GetCachedCount(string key)
     {
         return GetPool(key).CurCount;
+    }
+
+    /// <summary>
+    /// 清空全部对象池并销毁缓存对象。
+    /// 池里缓存的是场景物体，场景卸载后引用即失效；重进战斗场景前必须调用本方法。
+    /// </summary>
+    public void ClearAll()
+    {
+        foreach (var pool in mPools.Values)
+        {
+            pool.Clear(instance =>
+            {
+                if (instance != null) UnityEngine.Object.Destroy(instance);
+            });
+        }
+
+        mPools.Clear();
     }
 
     protected override void OnInit()

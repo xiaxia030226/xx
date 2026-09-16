@@ -46,6 +46,18 @@ public class EnemySpawnSystem : AbstractSystem, IEnemySpawnSystem
     {
         mPlayer = player;
         mParent = parent;
+
+        // 跨场景重入时重置波次运行状态，保证新一局从干净状态开始。
+        // mPrefabCache 缓存的是预制体资产而非场景实例，跨场景仍然有效，无需清空。
+        mWaveConfig = null;
+        mCurrentWave = 0;
+        mGroupIndex = 0;
+        mSpawnedInGroup = 0;
+        mSpawnTimer = 0f;
+        mNextWaveTimer = 0f;
+        mWaveRunning = false;
+        mWaitingNextWave = false;
+
         RegisterEnemyPools();
     }
 

@@ -1,6 +1,7 @@
 using Game.UI;
 using QFramework;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 当前阶段的场景启动入口。
@@ -33,6 +34,9 @@ public partial class GameRoot : MonoBehaviour, IController
     // mPendingLevelUps：等待玩家选择强化的升级次数（一次拾取多个水晶可能连升多级）。
     private int mPendingLevelUps;
 
+    // mResultEntered：本局是否已进入过结算，防止胜利与死亡信号重复触发结算。
+    private bool mResultEntered;
+
     public IArchitecture GetArchitecture() => GameArchitecture.Interface;
 
     /// <summary>
@@ -48,26 +52,37 @@ public partial class GameRoot : MonoBehaviour, IController
         // 第 2 步：用项目配置替换 UIKit 默认配置，让面板类型自动映射到 Resources/UI 路径。
         UIKit.Config = new GameUIKitConfig();
 
-        // 第 3 步：搭建战场环境（地面、围墙、挂点）、创建玩家、设置跟随相机。
+        // 第 3 步：跨场景重入清理——清空对象池（池里可能残留上局场景的无效引用）、
+        // 重置各 Model 数据与流程字段，并把状态推进到战斗进行中。
+        this.GetSystem<IGameObjectPoolSystem>().ClearAll();
+        this.GetModel<IPlayerModel>().Reset();
+        this.GetModel<IEnemyModel>().Reset();
+        var stateModel = this.GetModel<IGameStateModel>();
+        stateModel.CurrentWave.Value = 0;
+        stateModel.State.Value = GameState.Playing;
+        mPendingLevelUps = 0;
+        mResultEntered = false;
+
+        // 第 4 步：搭建战场环境（地面、围墙、挂点）、创建玩家、设置跟随相机。
         // 环境搭建的实现见 GameRoot.Environment.cs（partial 拆分）。
         CreateDirectionalLight();
         CreateBattleEnvironment();
         PlayerInstance = CreatePlayer();
         CreateMainCamera(PlayerInstance.transform);
 
-        // 第 4 步：初始化刷怪与武器系统，并注册经验水晶对象池。
+        // 第 5 步：初始化刷怪与武器系统，并注册经验水晶对象池。
         SetupSystems();
 
-        // 第 5 步：监听战斗事件——敌人死亡掉水晶、玩家升级弹面板、面板关闭继续升级。
+        // 第 6 步：监听战斗事件——敌人死亡掉水晶、玩家升级弹面板、面板关闭继续升级。
         RegisterBattleEvents();
 
-        // 第 6 步：打开战斗 HUD（血条与武器格子条，武器格子已并入 GameHUD）。
+        // 第 7 步：打开战斗 HUD（血条与武器格子条，武器格子已并入 GameHUD）。
         UIKit.OpenPanel<GameHUD>();
 
-        // 第 7 步：开始第一波敌人，战斗正式启动。
+        // 第 8 步：开始第一波敌人，战斗正式启动。
         mEnemySpawnSystem.StartWave(1);
 
-        // 第 8 步：注册调试按键（K 扣血、H 回血、L 加经验）。
+        // 第 9 步：注册调试按键（K 扣血、H 回血、L 加经验）。
         RegisterDebugKeys();
     }
 
@@ -77,7 +92,22 @@ public partial class GameRoot : MonoBehaviour, IController
     /// </summary>
     private void Update()
     {
+        // ESC：战斗中打开暂停面板并冻结时间；暂停中再按一次恢复。
+        if (GameInput.Pause.WasPressedThisFrame())
+        {
+            var state = this.GetModel<IGameStateModel>().State.Value;
+            if (state == GameState.Playing)
+            {
+                PauseGame();
+            }
+            else if (state == GameState.Paused)
+            {
+                ResumeGame();
+            }
+        }
+
         // deltaTime：本帧时间间隔，传给两个 System 用于计时推进。
+        // 暂停时 timeScale=0，deltaTime 为 0，两个系统空转无害。
         var deltaTime = Time.deltaTime;
 
         // 刷怪系统：推进生成计时、检测是否清场、过渡到下一波。
@@ -202,6 +232,14 @@ public partial class GameRoot : MonoBehaviour, IController
         // 事件 3：升级面板关闭 → 若还有未处理的升级（连升多级），立即再开面板。
         this.RegisterEvent<LevelUpPanelClosedEvent>(OnLevelUpPanelClosed)
             .UnRegisterWhenGameObjectDestroyed(gameObject);
+
+        // 事件 4：全部波次清空 → 进入胜利结算。
+        this.RegisterEvent<AllWavesClearedEvent>(_ => EnterResult(true))
+            .UnRegisterWhenGameObjectDestroyed(gameObject);
+
+        // 事件 5：玩家死亡 → 进入失败结算。
+        this.RegisterEvent<PlayerDiedEvent>(_ => EnterResult(false))
+            .UnRegisterWhenGameObjectDestroyed(gameObject);
     }
 
     /// <summary>
@@ -247,6 +285,72 @@ public partial class GameRoot : MonoBehaviour, IController
         {
             UIKit.OpenPanel<LevelUpPanel>(UILevel.PopUI);
         }
+    }
+
+    // ==================== 流程控制 ====================
+
+    /// <summary>
+    /// 暂停战斗：状态切到 Paused，冻结时间并打开暂停面板。
+    /// </summary>
+    private void PauseGame()
+    {
+        this.GetModel<IGameStateModel>().State.Value = GameState.Paused;
+        Time.timeScale = 0f;
+        UIKit.OpenPanel<PausePanel>(UILevel.PopUI);
+    }
+
+    /// <summary>
+    /// 从暂停恢复战斗：关闭暂停面板并恢复时间流速。供 ESC 与暂停面板的“继续”按钮调用。
+    /// </summary>
+    public static void ResumeGame()
+    {
+        GameArchitecture.Interface.GetModel<IGameStateModel>().State.Value = GameState.Playing;
+        Time.timeScale = 1f;
+        UIKit.ClosePanel<PausePanel>();
+    }
+
+    /// <summary>
+    /// 进入结算：按胜负结算金币（胜利 500 + 击杀×2；失败仅击杀×2），然后打开结算面板。
+    /// </summary>
+    /// <param name="victory">true 为通关胜利，false 为死亡失败。</param>
+    private void EnterResult(bool victory)
+    {
+        // 同一局可能先后收到多个结束信号，只结算一次，防止金币重复入账。
+        if (mResultEntered) return;
+        mResultEntered = true;
+
+        this.GetModel<IGameStateModel>().State.Value = GameState.Result;
+
+        // 结算本局金币：通过命令入账，Model 的订阅会自动写入存档。
+        var kills = this.GetModel<IEnemyModel>().KillCount.Value;
+        var gold = (victory ? 500 : 0) + kills * 2;
+        this.SendCommand(new AddGoldCommand(gold));
+
+        // 把本局战绩传给结算面板展示。
+        UIKit.OpenPanel<ResultPanel>(UILevel.PopUI, new ResultPanelData
+        {
+            Victory = victory,
+            Kills = kills,
+            GoldEarned = gold
+        });
+    }
+
+    /// <summary>
+    /// 返回主菜单：恢复时间流速、关闭战斗场景的全部面板，再加载主菜单场景。
+    /// 供暂停面板与结算面板的“返回主菜单”按钮调用。
+    /// </summary>
+    public static void ReturnToMainMenu()
+    {
+        // 恢复时间流速：从暂停状态返回时游戏处于冻结状态，必须先解冻。
+        Time.timeScale = 1f;
+
+        // 关闭战斗中的所有面板，避免跨场景残留。
+        UIKit.ClosePanel<GameHUD>();
+        UIKit.ClosePanel<LevelUpPanel>();
+        UIKit.ClosePanel<PausePanel>();
+        UIKit.ClosePanel<ResultPanel>();
+
+        SceneManager.LoadScene("MainMenu");
     }
 
     // ==================== 调试按键 ====================

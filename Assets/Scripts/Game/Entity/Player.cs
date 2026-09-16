@@ -23,6 +23,10 @@ public class Player : MonoBehaviour, IController
 
     private void Update()
     {
+        // 只有战斗进行中才响应输入；主菜单/暂停/结算状态下全部跳过。
+        // 暂停时 timeScale=0 虽能拦住移动，但转向和攻击不依赖 deltaTime，必须用状态闸门统一拦截。
+        if (this.GetModel<IGameStateModel>().State.Value != GameState.Playing) return;
+
         // 每帧按固定顺序处理：移动 → 转向 → 攻击 → 切换武器。
         HandleMove();
         FaceMouse();

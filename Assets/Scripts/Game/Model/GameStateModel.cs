@@ -21,6 +21,9 @@ public interface IGameStateModel : IModel
 {
     BindableProperty<GameState> State { get; }
     BindableProperty<int> CurrentWave { get; }
+
+    // SelectedLevel：选关界面写入的关卡编号，进入战斗场景时按它加载关卡内容。
+    BindableProperty<int> SelectedLevel { get; }
 }
 
 /// <summary>
@@ -28,8 +31,10 @@ public interface IGameStateModel : IModel
 /// </summary>
 public class GameStateModel : AbstractModel, IGameStateModel
 {
-    public BindableProperty<GameState> State { get; } = new BindableProperty<GameState>(GameState.Playing);
+    // 初始为 Boot：由两个场景入口（MainMenuRoot/GameRoot）负责推进到对应状态。
+    public BindableProperty<GameState> State { get; } = new BindableProperty<GameState>(GameState.Boot);
     public BindableProperty<int> CurrentWave { get; } = new BindableProperty<int>(0);
+    public BindableProperty<int> SelectedLevel { get; } = new BindableProperty<int>(1);
 
     /// <summary>
     /// Model 注册时调用，后续需要读取存档或初始化关卡状态时可放在这里。

@@ -12,11 +12,11 @@
 **核心循环**：
 
 ```
-主菜单 → 选角色 → 选关卡 → 战斗（清理敌人波次 → 击败Boss）
-                              ↓
-                         通关奖励金币
-                              ↓
-                 金币解锁局外天赋 → 回到主菜单
+主菜单 → 选关卡 → 战斗（清理敌人波次 → 击败Boss）
+                        ↓
+                   通关奖励金币
+                        ↓
+           金币解锁局外天赋 → 回到主菜单
 ```
 
 **技术路线**：基于 QFramework 框架（已引入 `Assets\Scripts\QFramework\`），纯代码创建游戏物体与 UI，占位几何体先行，美术素材后续替换。
@@ -92,7 +92,6 @@ Game/
     ├── WeaponBarHUD.cs           # 屏幕下方武器格子 1-9（阶段二）
     ├── LevelUpPanel.cs          # 升级 3 选 1（阶段三）
     ├── MainMenuPanel.cs         # 主菜单（阶段四）
-    ├── CharacterSelectPanel.cs  # 选角色（阶段四）
     ├── LevelSelectPanel.cs      # 选关卡（阶段四）
     ├── PausePanel.cs            # 暂停菜单（阶段四）
     └── ResultPanel.cs           # 结算面板（阶段四）
@@ -151,10 +150,9 @@ public class GameArchitecture : Architecture<GameArchitecture>
 | 面板 | 打开时机 | 内容 |
 |------|----------|------|
 | GameHUD | 战斗开始 | 血条、经验条、当前波次、武器格子（纯代码创建 UI 元素） |
-| LevelUpPanel | 升级时 | 3 选 1（武器升级 / 新武器 / 被动） |
-| MainMenuPanel | 启动 | 开始游戏、天赋入口 |
-| CharacterSelectPanel | 主菜单 → 开始 | 4 角色选择 |
-| LevelSelectPanel | 选完角色 | 关卡选择 |
+| LevelUpPanel | 升级时 | 3 选 1（随机枪械配件） |
+| MainMenuPanel | 主菜单场景启动 | 开始游戏、退出游戏 |
+| LevelSelectPanel | 主菜单 → 开始 | 关卡选择（关卡二置灰占位） |
 | PausePanel | 按 ESC | 继续、返回主菜单 |
 | ResultPanel | 通关/失败 | 结算奖励、返回 |
 
@@ -191,7 +189,7 @@ public class GameArchitecture : Architecture<GameArchitecture>
 **目标**：形成"杀怪 → 拾取 → 升级 → 变强"的成长循环。
 
 1. `ExperienceCrystal.cs`：敌人死亡掉落水晶；玩家靠近自动吸附；拾取发送 `GainExpCommand`
-2. 经验满升级：升级时打开 `LevelUpPanel`（3 选 1：已有武器升一级 / 随机新武器 / 被动增益）
+2. 经验满升级：升级时打开 `LevelUpPanel`（3 选 1：从配件池随机抽 3 个配件，装入当前武器）
 3. `WeaponSystem` 数据化：武器列表、等级、伤害成长曲线
 4. GameHUD 增加经验条与等级显示
 
@@ -199,18 +197,21 @@ public class GameArchitecture : Architecture<GameArchitecture>
 
 ### 阶段四：完整流程 UI（第四个里程碑）
 
-**目标**：拼齐"主菜单 → 选角 → 选关 → 战斗 → 结算 → 主菜单"的完整游戏流程。
+**目标**：拼齐“主菜单 → 选关 → 战斗 → 结算 → 主菜单”的完整游戏流程。
 
-1. `MainMenuPanel` / `CharacterSelectPanel` / `LevelSelectPanel`：纯代码 UI，选中的角色与关卡写入 Model
-2. `PausePanel`：ESC 暂停（Time.timeScale = 0），继续/返回主菜单
-3. `ResultPanel`：通关或死亡后显示金币奖励，金币用 PlayerPrefs 存档
-4. 结算金币 → 回主菜单可再次开局
+1. 双场景：新建 MainMenu 场景（挂 MainMenuRoot 入口组件）+ 现有 Game 场景；选关后 `SceneManager.LoadScene` 切换
+2. `MainMenuPanel` / `LevelSelectPanel`：选关写入 Model，关卡二置灰占位
+3. `PausePanel`：ESC 暂停（Time.timeScale = 0），继续/返回主菜单
+4. `ResultPanel`：通关或死亡后结算金币（通关 500 + 击杀×2；失败仅击杀×2），金币用 PlayerPrefs 存档（EconomyModel）
+5. 跨场景重入：对象池 ClearAll、武器/刷怪系统重置、各 Model 恢复初始值
+6. 结算金币 → 回主菜单可再次开局
 
 **验证**：全流程无报错可循环游玩；重开一局数据正确重置；金币跨局保留。
 
 ### 后续扩展（前四阶段跑通后按序加入）
 
-- 武器扩充：W2 长枪 → W10 圣光（设计文档 10 武器）
+- 配件改装系统：PartConfig 配置 + 枪口/弹药/枪机三槽位 + 升级面板随机抽取（阶段五）
+- 新枪械原型：霰弹枪、狙击枪等（同一套弹夹/换弹框架）
 - 关卡二：幽暗森林（新波次表 + 新敌人 AI）
 - Boss 战：史莱姆王、远古树精（技能循环）
 - 局外天赋树（金币消耗、逐层解锁）

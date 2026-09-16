@@ -52,3 +52,8 @@ public struct LevelUpEvent
 public struct LevelUpPanelClosedEvent
 {
 }
+
+/// <summary>玩家生命归零时广播，由 GameRoot 接管进入失败结算。只在战斗进行中发送。</summary>
+public struct PlayerDiedEvent
+{
+}
