@@ -1,25 +1,30 @@
 # 割草 Roguelike 开发计划
 
 > 本文件是 xx 项目后续开发的唯一总纲。开发严格按阶段推进，每阶段完成后对照验证标准确认效果。
-> 玩法设计见同目录 `GameDesign.md`。
+> 玩法设计见同目录 `GameDesign.md`（摸金掉落经济版）；`DesignDetails.md` 为旧设计，已过期待重写。
 
 ---
 
 ## 一、项目概述
 
-**产品定位**：2.5D 卡通风格关卡制 Roguelike 割草动作游戏。PC 键鼠操作，4 角色 + 10 武器，首批 2 个关卡。
+**产品定位**：2.5D 卡通风格关卡制 Roguelike 割草动作游戏。PC 键鼠操作，**单角色纯枪械**，无局内升级——局内构筑靠摸金掉落（整枪 / 配件 / 护盾 / 子弹 / 金币），局末结算售卖战利品换金币，金币投入局外天赋。首批 5 个关卡分批制作。
 
 **核心循环**：
 
 ```
-主菜单 → 选关卡 → 战斗（清理敌人波次 → 击败Boss）
+主菜单 → 选关卡 → 战斗（定时波次 + F 提前召唤 → 摸金掉落构筑 → 击败Boss）
                         ↓
-                   通关奖励金币
+              结算：战利品售卖 + 通关奖励 → 金币
                         ↓
-           金币解锁局外天赋 → 回到主菜单
+           金币点局外天赋 → 回到主菜单
 ```
 
-**技术路线**：基于 QFramework 框架（已引入 `Assets\Scripts\QFramework\`），纯代码创建游戏物体与 UI，占位几何体先行，美术素材后续替换。
+**技术路线**：
+
+- QFramework 框架（`Assets\Scripts\QFramework\`）：Architecture/Model/System/Command 分层，UIKit 管理面板，PoolKit 对象池
+- Input System 1.7.0：纯代码创建 InputAction（无 .inputactions 资产），见 `Input/GameInput.cs`
+- 配置数据一律走 **ScriptableObject + Resources 懒加载静态配置表** 惯例（见 `Config/` 下各 ConfigTable）
+- 占位几何体先行，美术素材后续替换；UI 走 prefab + Bind 组件生成 Designer 代码的 UIKit 流程
 
 ---
 
@@ -31,9 +36,8 @@
 |----|------|------|----------|
 | Architecture | `Architecture<T>` 子类 | 模块总管（单例），注册并分发 Model/System/Command | 容器 |
 | Model | `AbstractModel` 子类 | 存数据，字段用 `BindableProperty<T>` 承载，变化自动通知 UI | M |
-| System | `AbstractSystem` 子类 | 无状态业务逻辑（波次生成、武器管理） | 服务层 |
-| Command | `AbstractCommand` 子类 | 写操作（扣血、加经验），唯一允许改数据的入口 | 命令 |
-| Query | `AbstractQuery<T>` 子类 | 读操作（查询当前生命值等） | 查询 |
+| System | `AbstractSystem` 子类 | 无状态业务逻辑（波次生成、武器管理）；**无 Update，由 GameRoot 手动 Tick(dt)** | 服务层 |
+| Command | `AbstractCommand` 子类 | 写操作（扣血、加子弹），唯一允许改数据的入口 | 命令 |
 | Controller | MonoBehaviour + `IController` | Unity 与架构的桥梁（Player、Enemy 等实体脚本） | C |
 | View | `UIPanel` 子类 | 界面展示，订阅 Model 的 BindableProperty 自动刷新 | V |
 | Event | `TypeEventSystem` | 跨模块通知（如"敌人死亡"），注册后必须注销 | 事件总线 |
@@ -48,53 +52,62 @@
 
 ### 工具包使用
 
-- **UIKit**：所有界面继承 `UIPanel`，通过 `UIKit.OpenPanel<T>()` 打开，Canvas 由框架自动创建
-- **AudioKit**：音效统一走 `AudioKit.PlaySound("名字")` / `PlayMusic("名字")`
-- **ResKit**：美术资源接入后由 ResKit 管理加载
+- **UIKit**：所有界面继承 `UIPanel`，通过 `UIKit.OpenPanel<T>()` 打开；控件绑定走 prefab 挂 Bind 组件 → 生成 `XxxPanel.Designer.cs`（禁手改）→ 逻辑写 `XxxPanel.cs`
+- **PoolKit**：`SimpleObjectPool<GameObject>` 管理敌人 / 子弹 / 掉落物，预热后复用
+- **AudioKit / ResKit**：美术资源接入后启用
 
 ---
 
 ## 三、目录结构设计
 
-全部游戏代码新建在 `Assets\Scripts\Game\` 下：
+全部游戏代码在 `Assets\Scripts\Game\` 下（无 namespace；UI 面板用 `Game.UI`）：
 
 ```
 Game/
 ├── GameArchitecture.cs          # 模块总管，注册所有 Model/System
-├── GameRoot.cs                  # 场景入口（唯一需手动挂到场景的组件）
+├── GameRoot.cs                  # 战斗场景入口（+ GameRoot.Environment.cs 环境搭建 partial）
+├── Input/
+│   └── GameInput.cs             # 纯代码 InputAction 集中定义
+├── Event/
+│   └── BattleEvents.cs          # 全部战斗事件 struct
 ├── Model/
-│   ├── IPlayerModel.cs          # 玩家数据接口
-│   ├── PlayerModel.cs           # HP、移速、等级、经验
-│   ├── IGameStateModel.cs       # 游戏状态接口
-│   ├── GameStateModel.cs        # 进行中/暂停/结束
-│   ├── IEnemyModel.cs           # 敌人数据接口（阶段二）
-│   └── EnemyModel.cs            # 敌人总表、击杀数
+│   ├── PlayerModel.cs           # HP、移速
+│   ├── GameStateModel.cs        # 游戏状态、当前波次、提前召唤倍率
+│   ├── EnemyModel.cs            # 存活数、击杀数
+│   ├── EconomyModel.cs          # 金币（PlayerPrefs 存档）+ 本局入账 RunGold
+│   └── BulletInventoryModel.cs  # 子弹库存：（口径, 穿甲等级）→ 数量
 ├── System/
-│   ├── IEnemySpawnSystem.cs     # 波次生成接口（阶段二）
-│   ├── EnemySpawnSystem.cs      # 波次调度与生成
-│   ├── IWeaponSystem.cs         # 武器管理接口（阶段二）
-│   └── WeaponSystem.cs          # 武器持有与升级
+│   ├── EnemySpawnSystem.cs      # 定时波次调度 + F 提前召唤 + 下一波预告
+│   └── WeaponSystem.cs          # 武器槽位（可空）、切枪、换弹驱动、按口径子弹池
 ├── Command/
-│   ├── PlayerTakeDamageCommand.cs   # 玩家受伤（阶段二）
-│   ├── EnemyTakeDamageCommand.cs    # 敌人受伤（阶段二）
-│   └── GainExpCommand.cs            # 获得经验（阶段三）
-├── Query/
-│   └── (按需新增，如查询当前武器伤害)
+│   ├── PlayerTakeDamageCommand.cs
+│   ├── EnemyTakeDamageCommand.cs
+│   ├── AddGoldCommand.cs
+│   ├── AddBulletsCommand.cs     # 子弹入库
+│   └── TakeBulletsCommand.cs    # 换弹预扣（同步执行读回执）
 ├── Entity/
-│   ├── Player.cs                # 玩家：WASD 移动、鼠标朝向、左键攻击
-│   ├── Enemy.cs                 # 敌人：追击 AI（阶段二）
-│   ├── ExperienceCrystal.cs     # 经验水晶：吸附拾取（阶段三）
+│   ├── Player.cs                # WASD 移动、鼠标朝向、攻击/切枪/换弹输入接线
+│   ├── Enemy.cs                 # 追击 AI、死亡掉落掷点
+│   ├── Bullet.cs                # 子弹飞行与命中
+│   ├── GoldPickup.cs            # 金币掉落物：磁吸拾取（代码建占位几何体入池）
+│   ├── AmmoPackPickup.cs        # 子弹包掉落物：磁吸拾取
 │   └── Weapons/
-│       ├── WeaponBase.cs        # 武器抽象基类：弹药/能量/冷却、攻击逻辑
-│       └── SwordWeapon.cs       # 铁剑：能量制近战，左键扇形横扫（阶段二）
-└── View/
-    ├── GameHUD.cs               # 战斗 HUD：血条、经验条、波次、武器格子（阶段一）
-    ├── WeaponBarHUD.cs           # 屏幕下方武器格子 1-9（阶段二）
-    ├── LevelUpPanel.cs          # 升级 3 选 1（阶段三）
-    ├── MainMenuPanel.cs         # 主菜单（阶段四）
-    ├── LevelSelectPanel.cs      # 选关卡（阶段四）
-    ├── PausePanel.cs            # 暂停菜单（阶段四）
-    └── ResultPanel.cs           # 结算面板（阶段四）
+│       ├── WeaponBase.cs        # 武器抽象基类：耐久、冷却、攻击逻辑
+│       └── GunWeapon.cs         # 枪械：弹夹（等级+数量）、换弹状态机、磨损
+├── Config/
+│   ├── WeaponConfig.cs / WeaponConfigTable.cs      # 枪械 SO + 查询表
+│   ├── BulletConfig.cs / BulletConfigTable.cs      # 子弹 SO + 查询表（口径×等级）
+│   ├── EnemyConfig.cs / EnemyConfigTable.cs        # 敌人 SO + 查询表（含掉落字段）
+│   ├── WaveConfigTable.cs       # 波次表（代码配置）：定时启动、生成组
+│   └── AmmoTypes.cs             # 口径枚举 + 等级倍率/磨损系数表
+├── Editor/
+│   └── BulletAssetGenerator.cs  # MenuItem 一键生成 18 个子弹 SO 资产
+└── UI/                          # namespace Game.UI，prefab + Bind 生成 Designer
+    ├── GameHUD.cs               # 血条、武器格子、波次倒计时/预告、金币、子弹库存
+    ├── GameHUD/WeaponBarSlot.cs # 武器格子：弹量/等级/耐久/换弹置灰
+    ├── MainMenuPanel.cs / LevelSelectPanel.cs
+    ├── PausePanel.cs / ResultPanel.cs   # 结算：掉落 + 通关奖励
+    └── BuildViewPanel.cs        # 装配查看（Tab，阶段四新增）
 ```
 
 ---
@@ -103,119 +116,147 @@ Game/
 
 ### GameArchitecture（模块总管）
 
-```csharp
-public class GameArchitecture : Architecture<GameArchitecture>
-{
-    protected override void Init()
-    {
-        RegisterModel<IPlayerModel>(new PlayerModel());
-        RegisterModel<IGameStateModel>(new GameStateModel());
-        // 阶段二追加：
-        // RegisterModel<IEnemyModel>(new EnemyModel());
-        // RegisterSystem<IEnemySpawnSystem>(new EnemySpawnSystem());
-        // RegisterSystem<IWeaponSystem>(new WeaponSystem());
-    }
-}
-```
+注册全部 Model/System，访问方式 `GameArchitecture.Interface`（首次访问自动初始化）。当前注册清单：PlayerModel、GameStateModel、EnemyModel、EconomyModel、BulletInventoryModel；EnemySpawnSystem、WeaponSystem。
 
-访问方式：`GameArchitecture.Interface`（首次访问自动初始化）。
+### 关键 Model 字段
 
-### PlayerModel（玩家数据）
+| Model | 字段 | 说明 |
+|-------|------|------|
+| PlayerModel | HP / MaxHP / MoveSpeed | 无经验、无等级（新设计已删除局内升级） |
+| GameStateModel | State / CurrentWave / SummonMultiplier | SummonMultiplier：F 提前召唤掉落倍率（1.0 基准） |
+| EconomyModel | Gold / RunGold | Gold 落盘存档；RunGold 本局掉落入账，每局重置 |
+| BulletInventoryModel | 字典 (Caliber, Level) → 数量 | 初始 S·0 级 ×60；变更发 BulletInventoryChangedEvent |
+| EnemyModel | AliveCount / KillCount | 每局重置 |
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| HP | `BindableProperty<int>` | 当前生命，UI 订阅刷新 |
-| MaxHP | `BindableProperty<int>` | 最大生命 |
-| MoveSpeed | `BindableProperty<float>` | 移动速度（基础 5） |
-| Level | `BindableProperty<int>` | 等级 |
-| Exp | `BindableProperty<int>` | 当前经验 |
-| ExpNeed | `BindableProperty<int>` | 升级所需经验 |
+### 枪械核心规则（GameDesign 对齐）
 
-### GameStateModel（游戏状态）
+- **弹夹制**：每把枪独立记录（已装子弹等级 + 弹量 + 下次装填等级）；打空自动换弹，**不自动切枪**
+- **R** 主动换弹、**B** 循环切换下次装填的穿甲等级（0~5），各枪独立记忆；换弹在后台继续（切枪不中断）
+- **换弹预扣**：换弹开始时按选定等级从库存预扣子弹，完成时装入弹夹；库存不足部分装填，无弹发缺弹事件
+- **伤害** = 枪械基础伤害 × 等级倍率（1.0/1.0/1.1/1.2/1.3/1.4）×（0 级肉弹对无护盾目标 ×1.5）
+- **耐久**：每次射击磨损 1 × 等级磨损系数（1.00/0.95/0.90/0.85/0.80/0.75）；≤20% 警示，归零报废腾格（槽位置 null），不自动切枪
+- **子弹口径**：S / AR / L 三类，每类 0~5 穿甲等级共 18 种；同口径共享子弹 prefab 对象池
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| State | `BindableProperty<GameState>` | 枚举：Playing / Paused / GameOver / Victory |
-| CurrentWave | `BindableProperty<int>` | 当前波次 |
+### 波次核心规则（定时制）
 
-### 实体层协作方式
+- 每波按 `IntervalFromPrev`（距上一波实际启动的秒数）到点必刷，**残兵不清也叠加**
+- **F** 提前召唤下一波，本波掉落倍率 1.5 → 1.75 → 2.0 递增；自然到点重置 1.0
+- 最后一波生成完且存活数归零 → AllWavesClearedEvent → 结算
+- EnemySpawnSystem 暴露只读 `NextWaveCountdown` / `NextWavePreview`（种类+数量）供 HUD 轮询
 
-- **Player**（Controller）：每帧读 WASD 输入移动，鼠标控制朝向；碰撞处理通过 `OnTriggerEnter` 收到伤害信号后发送 `PlayerTakeDamageCommand`
-- **Enemy**（阶段二）：`Update` 中向玩家方向移动；由 `EnemySpawnSystem` 定时生成
-- **WeaponBase**：持有弹药/能量上限、当前值、冷却时间、伤害数值；子类实现 `Attack()`；由 `WeaponSystem` 管理切换与冷却
-- **ExperienceCrystal**（阶段三）：敌人死亡时由敌人发送事件触发生成；玩家靠近时加速吸附
+### 掉落与结算
+
+- 敌人配置携带掉落字段：金币区间、子弹包概率/等级区间/数量区间；死亡时按配置 × 召唤倍率掷点（金币取整、概率封顶 1）
+- 掉落物（金币 / 子弹包）为代码创建的占位几何体，磁吸拾取入账（AddGoldCommand → RunGold / AddBulletsCommand → 库存）
+- 结算公式：**总金币 = 本局掉落入账 + 通关奖励（胜 500 / 败 0）**
 
 ### View 层清单
 
 | 面板 | 打开时机 | 内容 |
 |------|----------|------|
-| GameHUD | 战斗开始 | 血条、经验条、当前波次、武器格子（纯代码创建 UI 元素） |
-| LevelUpPanel | 升级时 | 3 选 1（随机枪械配件） |
-| MainMenuPanel | 主菜单场景启动 | 开始游戏、退出游戏 |
-| LevelSelectPanel | 主菜单 → 开始 | 关卡选择（关卡二置灰占位） |
+| GameHUD | 战斗开始 | 血条、武器格子（弹量/等级/耐久）、下一波倒计时与预告、召唤倍率、本局金币、子弹库存 |
+| BuildViewPanel | 按 Tab | 当前装配查看 |
+| MainMenuPanel | 主菜单场景 | 开始游戏、退出 |
+| LevelSelectPanel | 主菜单 → 开始 | 关卡选择 |
 | PausePanel | 按 ESC | 继续、返回主菜单 |
-| ResultPanel | 通关/失败 | 结算奖励、返回 |
+| ResultPanel | 通关/失败 | 掉落 X + 通关奖励 Y = 合计 Z |
 
 ---
 
 ## 五、分阶段开发路线
 
-### 阶段一：地基 + 玩家移动 + HUD（第一个里程碑）
+### 阶段一：QFramework 地基 + 战斗流程闭环（✅ 已完成）
 
-**目标**：跑通 QFramework 全流程——架构初始化、数据绑定、UI 自动刷新。
+双场景流程（主菜单/选关/暂停/结算）、玩家移动射击、手枪+机枪、单一史莱姆、对象池、配置表惯例、GameHUD 血条与武器格子。
 
-1. `GameArchitecture.cs`：注册 PlayerModel、GameStateModel
-2. `GameRoot.cs`：Awake 初始化架构；代码创建地面（Plane）、玩家（Cube 占位）、正交摄像机跟随逻辑
-3. `Player.cs`：WASD 八方向移动，鼠标控制朝向（始终面向鼠标位置）
-4. `GameHUD.cs`：`UIKit.OpenPanel<GameHUD>()` 打开；OnInit 中代码创建 HP 文本；订阅 `PlayerModel.HP` 变化自动刷新
-5. 临时测试：按空格键发送扣血 Command，验证 HP → HUD 的整条数据链路
+> 注：该阶段曾实现"经验水晶 → 升级三选一"与"清场制波次"，属旧设计，已在阶段二移除/重做。
 
-**验证**：Play 后方块随 WASD 移动，鼠标控制朝向；按空格 HP 减少且 HUD 文本实时变化；无报错。
+### 阶段二：新设计对齐改造（🔄 本轮）
 
-### 阶段二：敌人 + 战斗闭环（第二个里程碑）
+**目标**：删掉/重做已实现但与本版 GameDesign 冲突的功能，经济底座换轨到摸金掉落。
 
-**目标**：形成"敌人追玩家、铁剑清怪、玩家掉血"的最小战斗循环。
+1. 删除局内升级：经验水晶、GainExpCommand、LevelUpPanel、PlayerModel 经验字段
+2. 波次改定时制 + F 提前召唤（倍率 1.5/1.75/2.0，自然到点重置 1.0）+ 下一波倒计时/预告数据
+3. 武器重做：删自动切枪；R 主动换弹、B 切穿甲等级（各枪独立）；换弹预扣库存、后台继续；耐久磨损→警示→报废腾格
+4. 子弹库存：BulletInventoryModel + 18 种子弹配置（口径×等级）+ Editor 一键生成资产
+5. 掉落：金币 + 子弹包（磁吸拾取、占位几何体入池）；敌人配置掉落字段
+6. 结算公式：掉落入账 + 通关奖励（胜 500 / 败 0）
+7. GameHUD 扩展（依赖 prefab 手工步骤后实施）：波次倒计时/预告、金币、子弹库存、格子弹量/耐久/等级
 
-1. `Enemy.cs`：Sphere 占位，向玩家直线追击；触碰玩家发送 `PlayerTakeDamageCommand`
-2. `EnemyModel` + `EnemySpawnSystem`：按波次表定时生成（波次 1：8 只史莱姆参数）；全灭进入下一波
-3. `SwordWeapon.cs`（铁剑）：能量制近战（100 能量，每次消耗 30，每秒恢复 30），左键点击/长按攻击，能量耗尽自动切换
-4. `EnemyTakeDamageCommand`：敌人 HP 归零 → 销毁 + 击杀数 +1 + 发送死亡事件
-5. GameHUD 增加波次显示、武器格子、敌人击杀数
+**验证**：见文末 Play 验证清单。
 
-**验证**：敌人持续生成并追击；鼠标左键攻击铁剑，能量耗尽自动切换；敌人触碰后玩家血条下降；清空一波后自动刷下一波。
+### 阶段三：护盾系统 + 敌人 AI 扩展 + 关卡一完整化
 
-### 阶段三：经验 + 升级系统（第三个里程碑）
+**目标**：伤害分配表落地，关卡一（W1~W5 + B01）完整可玩。
 
-**目标**：形成"杀怪 → 拾取 → 升级 → 变强"的成长循环。
+1. 护盾系统：目标护盾层级（0~3）与伤害分配表（穿甲等级 × 护盾层级 → 穿/卡/弹）；掉落新增护盾道具
+2. 敌人 AI 扩展：E02~E08（冲锋、远程、自爆、治疗等 8 种行为）
+3. 关卡一完整波次表 W1~W5 与 Boss B01；预告列表加护盾列
+4. 波次时长/掉落梯度按 GameDesign 关卡一数值校准
 
-1. `ExperienceCrystal.cs`：敌人死亡掉落水晶；玩家靠近自动吸附；拾取发送 `GainExpCommand`
-2. 经验满升级：升级时打开 `LevelUpPanel`（3 选 1：从配件池随机抽 3 个配件，装入当前武器）
-3. `WeaponSystem` 数据化：武器列表、等级、伤害成长曲线
-4. GameHUD 增加经验条与等级显示
+**验证**：护盾三态（穿/卡/弹）表现正确；E02~E08 行为各自成立；关卡一全程可通关。
 
-**验证**：杀怪掉水晶，靠近拾取；经验条满后弹出 3 选 1；选择后武器伤害/属性提升可感知。
+### 阶段四：配件 + 枪械原型扩充 + 整枪掉落 + 售卖
 
-### 阶段四：完整流程 UI（第四个里程碑）
+**目标**：构筑深度落地，摸金经济闭环。
 
-**目标**：拼齐“主菜单 → 选关 → 战斗 → 结算 → 主菜单”的完整游戏流程。
+1. 配件系统：13 普通配件 + 4 诅咒配件 + 同槽共鸣；装配/卸下、Tab 装配面板完善
+2. 枪械原型 G3~G8（霰弹/狙击/冲锋/榴弹/左轮/蜂刺）补齐
+3. 整枪 / 配件 / 护盾掉落接入波次掉落表；应急补给箱（赏金兜底）
+4. 结算面板升级：战利品清单逐件售卖（含诅咒配件强制售卖）
+5. **移除开局机枪**（阶段二的临时测试配置），开局仅手枪
 
-1. 双场景：新建 MainMenu 场景（挂 MainMenuRoot 入口组件）+ 现有 Game 场景；选关后 `SceneManager.LoadScene` 切换
-2. `MainMenuPanel` / `LevelSelectPanel`：选关写入 Model，关卡二置灰占位
-3. `PausePanel`：ESC 暂停（Time.timeScale = 0），继续/返回主菜单
-4. `ResultPanel`：通关或死亡后结算金币（通关 500 + 击杀×2；失败仅击杀×2），金币用 PlayerPrefs 存档（EconomyModel）
-5. 跨场景重入：对象池 ClearAll、武器/刷怪系统重置、各 Model 恢复初始值
-6. 结算金币 → 回主菜单可再次开局
+**验证**：配件效果与共鸣生效；整枪掉落可拾取入栏；售卖金额与结算一致；开局只有手枪。
 
-**验证**：全流程无报错可循环游玩；重开一局数据正确重置；金币跨局保留。
+### 阶段五：传奇枪械 + 连携机制
 
-### 后续扩展（前四阶段跑通后按序加入）
+**目标**：3 把传奇枪（各带专属机制）+ 破盾连锁 + 枪斗连携。
 
-- 配件改装系统：PartConfig 配置 + 枪口/弹药/枪机三槽位 + 升级面板随机抽取（阶段五）
-- 新枪械原型：霰弹枪、狙击枪等（同一套弹夹/换弹框架）
-- 关卡二：幽暗森林（新波次表 + 新敌人 AI）
-- Boss 战：史莱姆王、远古树精（技能循环）
-- 局外天赋树（金币消耗、逐层解锁）
-- 双人合作模式（第二输入、镜头自适应）
+1. 传奇枪 ×3：专属词条与获取途径（Boss 掉落/隐藏条件）
+2. 破盾连锁：破盾瞬间的范围效果
+3. 枪斗连携：近战处决与射击衔接
+
+**验证**：三传奇各自机制成立且不与配件冲突；连锁/连携触发稳定。
+
+### 阶段六：赏金挑战
+
+**目标**：局内随机赏金事件（Y/N 接受、30 秒限时、奖励兑现）。
+
+1. 赏金生成器：条件（武器栏空位 + 未持有枪型 → 预选枪；否则当前口径子弹 ×20，邀请生成时锁定）
+2. 赏金目标类型与倒计时 UI；超时/失败处理
+3. 奖励兑现与应急补给箱联动
+
+**验证**：邀请条件锁定正确；接受/拒绝/超时三分支奖励与惩罚符合设计。
+
+### 阶段七：局外天赋树 + 存档扩展
+
+**目标**：5 分支 17 节点天赋树，金币消耗逐层解锁。
+
+1. 天赋配置（SO + 配置表）与效果挂载点
+2. 天赋面板（主菜单进入）与解锁状态存档
+3. 存档结构扩展（金币 + 天赋 + 图鉴进度）
+
+**验证**：天赋效果入局生效；存档读写跨会话正确。
+
+### 阶段八：关卡二 ~ 五
+
+**目标**：幽暗森林 / 熔岩洞窟 / 寒冰要塞 / 深渊裂谷四关，15 新怪 + B02~B05。
+
+1. 四关地图机制（环境伤害/地形机关）与 30 波次表
+2. 15 种新敌人 AI + 4 个 Boss 技能循环
+3. 各关掉落梯度与枪械组合解锁节奏按 GameDesign 校准
+
+**验证**：每关独立可通关；机制与怪物组合无死局；掉落梯度平滑。
+
+### 阶段九：双人合作
+
+**目标**：本地双人（第二输入、镜头自适应、掉落分配）。
+
+1. 第二套输入绑定与玩家实体复制
+2. 镜头跟随/缩放的自适应
+3. 掉落拾取归属与结算分账
+
+**验证**：双人全程可玩，输入互不干扰，结算分账正确。
 
 ---
 
@@ -223,30 +264,55 @@ public class GameArchitecture : Architecture<GameArchitecture>
 
 | 阶段 | 验收一句话标准 |
 |------|----------------|
-| 一 | WASD 移动 + 鼠标朝向 + HUD 实时显示 HP，数据链路完整 |
-| 二 | 敌人追击、左键攻击铁剑、能量耗尽自动切换、玩家掉血，波次自动推进 |
-| 三 | 杀怪 → 吸水晶 → 升级 3 选 1 → 变强，成长闭环成立 |
-| 四 | 完整流程可循环游玩，金币跨局保留 |
+| 一 ✅ | 完整流程可循环游玩，金币跨局保留 |
+| 二 🔄 | 无升级弹窗；定时波次 + F 倍率正确；不自动切枪、R/B 换弹装填正确；子弹库存扣减；耐久报废腾格；金币/子弹包掉落入账；结算 = 掉落 + 奖励 |
+| 三 | 护盾三态成立；E02~E08 行为正确；关卡一完整通关 |
+| 四 | 配件/共鸣生效；整枪掉落入栏；逐件售卖金额正确；开局仅手枪 |
+| 五 | 三传奇机制成立；破盾连锁与枪斗连携稳定 |
+| 六 | 赏金 Y/N、30s、奖励兑现与兜底锁定全分支正确 |
+| 七 | 天赋入局生效；存档跨会话正确 |
+| 八 | 四关独立可通关，机制/怪物/掉落节奏符合设计 |
+| 九 | 双人输入互不干扰，结算分账正确 |
+
+### 阶段二 Play 验证清单
+
+| 改动 | 预期 |
+|------|------|
+| 删升级 | 杀怪不掉水晶、无升级弹窗、无报错 |
+| 定时波次 | 倒计时到点必刷且残兵叠加；F 提前 + 倍率 1.5→1.75→2.0；自然到点重置 1.0 |
+| 换弹/切枪 | 打空自动换弹但不切枪；R 主动换；B 循环等级且两枪独立记忆；换弹切后台仍继续 |
+| 子弹库存 | 库存扣减/部分装填/缺弹提示正确；初始 S·0×60 含首次装填 |
+| 耐久 | 磨损 → ≤20% 警示 → 归零报废腾格且不自动切枪 |
+| 掉落 | 金币自动吸附入账；子弹包入库存 |
+| 结算 | 胜 = 掉落 + 500，败 = 掉落；重开一局全部重置 |
 
 ---
 
 ## 七、手工操作清单（需要你在 Unity 编辑器完成的事）
 
-| 阶段 | 操作 |
-|------|------|
-| 阶段一开发前 | 1. 新建场景 `Game.unity`（与 Loading.unity 同级）<br>2. 场景中创建空物体，挂上 `GameRoot` 组件<br>3. File → Build Settings 将 Game.unity 加入场景列表 |
-| 每阶段完成后 | Play 验证，把报错信息发给我 |
-| 接入美术时 | 把代码创建的占位物体在编辑器里保存为预制体，或告诉我替换方式 |
+> 原则：AI 只改 .cs 文件；prefab / 场景 / .asset 的改动由你手工执行（或跑我提供的 Editor 菜单脚本）。
 
-> 除上述操作外，其余全部由代码完成，无需在编辑器手动创建物体。
+### 阶段二（本轮）手工清单——按顺序执行
+
+1. **生成子弹资产**：菜单跑 `Editor/BulletAssetGenerator` 提供的 MenuItem，一键生成 18 个子弹 SO 到 `Resources/Configs/Bullets/`；然后**手删旧的 `NormalBullet.asset`**（否则 19 个配置并存，口径查询会乱）
+2. **补武器资产字段**：`Pistol.asset` / `MachineGun.asset` 在 Inspector 补 `Caliber`（S / AR）与 `DurabilityMax`（100 / 240）
+3. **核对敌人资产掉落字段**：`SlimeGreen.asset` 核对/填写金币区间、子弹包概率与等级/数量区间
+4. **择机手删 `LevelUpPanel.prefab`**（代码删除后该 prefab 会变 missing script）
+5. **GameHUD.prefab**（及必要时 `ResultPanel.prefab`）：按我给出的元素清单添加 Bind 控件并重新生成代码 → 然后我再写 HUD 逻辑
+
+### 每阶段通用
+
+- 每阶段完成后 Play 验证，把报错信息发给我
+- 接入美术时把代码创建的占位物体保存为预制体，或告诉我替换方式
 
 ---
 
 ## 八、代码规范约定
 
-1. **命名**：Model 接口以 `I` 开头（如 `IPlayerModel`），实现类去掉 `I`；面板以 `Panel` 结尾；Command 以 `Command` 结尾
-2. **创建物体**：游戏物体、UI 全部纯代码创建（占位几何体 + 代码 UI），不依赖场景预摆放
-3. **数据流**：单向——输入/碰撞 → Command → Model 变更 → 事件通知 → View 刷新
-4. **注释**：每个类头部一行注释说明职责；关键逻辑（如攻击范围计算）加注释说明思路
-5. **日志**：用 `Debug.Log`，临时调试日志标记 `[Debug]` 前缀，验证通过后删除
-6. **数值**：阶段二之前数值先硬编码在 Model/System 中，后续再考虑 ScriptableObject 配置化
+1. **注释**：每个变量、每个方法、每一步关键逻辑都写中文注释；类头部注释说明职责
+2. **命名空间**：游戏代码默认无 namespace；UI 面板统一 `namespace Game.UI`
+3. **命名**：Model 接口以 `I` 开头、实现去掉 `I`；面板以 `Panel` 结尾；Command 以 `Command` 结尾；事件以 `Event` 结尾
+4. **数据流**：单向——输入/碰撞 → Command → Model 变更（BindableProperty）→ 事件通知 → View 刷新；事件必须可注销（`UnRegisterWhenGameObjectDestroyed`）
+5. **System**：无 Update，统一由 `GameRoot.Update` 手动 `Tick(dt)` 驱动
+6. **配置**：新增可配置数据一律走 ScriptableObject 资产 + `Resources/Configs/` + 懒加载静态配置表惯例（参照 WeaponConfigTable）；新增资产用 Editor 脚本批量生成
+7. **日志**：用 `Debug.Log`，临时调试日志标记 `[Debug]` 前缀，验证通过后删除
