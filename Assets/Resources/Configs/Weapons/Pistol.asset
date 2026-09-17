@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: Pistol
   m_EditorClassIdentifier: 
   mId: pistol
-  mName: 普通手枪
+  mName: "\u666E\u901A\u624B\u67AA"
+  mCaliber: 0
   mMagazine: 12
   mReloadTime: 1.5
+  mDurabilityMax: 100
   mDamage: 10
   mRoundsPerMinute: 0
   mIsAutomatic: 0
-  mBulletId: bullet_normal

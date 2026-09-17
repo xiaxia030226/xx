@@ -6,11 +6,16 @@ using UnityEngine;
 /// </summary>
 public interface IEconomyModel : IModel
 {
+    // Gold：存档金币（跨局保留），变动即时落盘。
     BindableProperty<int> Gold { get; }
+
+    // RunGold：本局掉落入账统计，结算时并入 Gold，每局开始重置为 0。
+    BindableProperty<int> RunGold { get; }
 }
 
 /// <summary>
 /// 管理金币：启动时从 PlayerPrefs 读档，每次变动立即落盘，强退不丢。
+/// RunGold 是本局统计口径，不落盘。
 /// </summary>
 public class EconomyModel : AbstractModel, IEconomyModel
 {
@@ -18,6 +23,7 @@ public class EconomyModel : AbstractModel, IEconomyModel
     private const string GoldKey = "gold";
 
     public BindableProperty<int> Gold { get; } = new BindableProperty<int>(0);
+    public BindableProperty<int> RunGold { get; } = new BindableProperty<int>(0);
 
     protected override void OnInit()
     {

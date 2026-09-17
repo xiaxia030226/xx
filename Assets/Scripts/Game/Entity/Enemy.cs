@@ -1,100 +1,241 @@
 using QFramework;
 using UnityEngine;
 
-/// <summary>
-/// 阶段二敌人实体：追击玩家、按间隔造成接触伤害、受伤后死亡回池。
-/// </summary>
-public class Enemy : MonoBehaviour, IController, ICanSendEvent
+public partial class Enemy : MonoBehaviour, IController, ICanSendEvent
 {
-    private const float MapLimit = 49f;
+    [SerializeField] private EnemyTelegraph mTelegraph;
+    [SerializeField] private Transform mVisual;
 
     private EnemyConfig mConfig;
     private Transform mTarget;
-    private int mCurrentHP;
-    private float mNextAttackTime;
+    private Collider mBody;
+    private BattleObstacle mObstacle;
+    private BattleNavigation mNavigation;
+    private IEnemySpawnSystem mSpawnSystem;
+    private Vector3 mBaseScale;
+    private Vector3 mVisualScale;
+    private Vector3 mVisualPosition;
+    private float mCurrentHP;
+    private float mMaxHP;
+    private float mShieldCurrent;
+    private float mShieldMax;
+    private int mShieldLevel;
+    private float mSpawnMultiplier;
+    private float mRadius;
     private bool mIsAlive;
+    private bool mChild;
+    private bool mRecycled = true;
+    private bool mCombatCancelled;
+    private float mDeathTimer;
+    private EnemyDropData mDrops;
 
     public bool IsAlive => mIsAlive;
-    public string EnemyId => mConfig?.Id;
+    public string EnemyId => mConfig != null ? mConfig.Id : null;
+    public EnemyAIType AIType => mConfig != null ? mConfig.AIType : EnemyAIType.ChaseMelee;
+    public float CurrentHP => mCurrentHP;
+    public float MaxHP => mMaxHP;
+    public int ShieldLevel => mShieldLevel;
+    public float ShieldCurrent => mShieldCurrent;
+    public float ShieldMax => mShieldMax;
+    public float SpawnMultiplier => mSpawnMultiplier;
+    public float CollisionRadius => mRadius;
+    public bool IsChild => mChild;
+    public bool CanRepairShield => mIsAlive && !mCombatCancelled && mShieldCurrent > 0f && mShieldCurrent < mShieldMax;
 
     public IArchitecture GetArchitecture() => GameArchitecture.Interface;
 
-    /// <summary>
-    /// 每次从对象池取出时调用。必须在这里重置生命、目标和攻击计时等运行状态。
-    /// </summary>
-    public void OnSpawn(EnemyConfig config, Transform target)
+    private void Awake()
+    {
+        mBaseScale = transform.localScale;
+        mBody = GetComponent<Collider>();
+        if (mBody == null) mBody = GetComponentInChildren<Collider>();
+        mObstacle = GetComponent<BattleObstacle>();
+        if (mTelegraph == null) mTelegraph = GetComponentInChildren<EnemyTelegraph>();
+        if (mVisual != null)
+        {
+            mVisualScale = mVisual.localScale;
+            mVisualPosition = mVisual.localPosition;
+        }
+    }
+
+    public void OnSpawn(EnemyConfig config, Transform target, float multiplier, int shieldLevel,
+        float healthOverride = 0f, bool child = false)
     {
         mConfig = config;
         mTarget = target;
-        mCurrentHP = config.MaxHP;
-        mNextAttackTime = 0f;
+        mSpawnSystem = this.GetSystem<IEnemySpawnSystem>();
+        mNavigation = (mSpawnSystem.Environment != null ? mSpawnSystem.Environment : GameRoot.Environment)?.Navigation;
+        mMaxHP = healthOverride > 0f ? healthOverride : config.MaxHP;
+        mCurrentHP = mMaxHP;
+        mSpawnMultiplier = multiplier;
+        mChild = child;
+        mShieldLevel = child ? 0 : Mathf.Clamp(shieldLevel, 0, 5);
+        mShieldMax = mShieldLevel > 0 ? ShieldConfigTable.Get(mShieldLevel).Capacity : 0f;
+        mShieldCurrent = mShieldMax;
         mIsAlive = true;
+        mRecycled = false;
+        mCombatCancelled = false;
+        mDeathTimer = 0f;
+        var smallChild = child && healthOverride > 0f && healthOverride < config.MaxHP;
+        transform.localScale = mBaseScale * (smallChild ? 0.65f : 1f);
+        if (mBody != null) mBody.enabled = true;
+        if (mObstacle != null) mObstacle.enabled = config.AIType == EnemyAIType.Slam;
+        Physics.SyncTransforms();
+        mRadius = mBody != null
+            ? Mathf.Max(0.2f, Mathf.Max(mBody.bounds.extents.x, mBody.bounds.extents.z))
+            : GetSpawnRadius(config, smallChild);
+        ResetAI();
+        mTelegraph?.ResetVisuals();
+        mTelegraph?.RefreshShield(transform.position, mRadius, mShieldLevel, mShieldCurrent, mShieldMax, 0f);
+        mDrops = EnemyDropData.Roll(config, multiplier, mSpawnSystem.Stage,
+            this.GetSystem<IWeaponSystem>().Weapons, child);
     }
 
-    /// <summary>
-    /// 武器命中入口，只负责发送 Command，不在碰撞判定处直接结算生命。
-    /// </summary>
-    public void TakeHit(int damage)
+    public static float GetSpawnRadius(EnemyConfig config, bool child = false)
     {
-        if (!mIsAlive || damage <= 0) return;
+        if (child) return 0.35f;
+        if (config.AIType == EnemyAIType.SlimeKing) return 1.5f;
+        if (config.AIType == EnemyAIType.Slam) return 1f;
+        return 0.5f;
+    }
+
+    public void TakeHit(DamageInfo damage)
+    {
+        if (!CanTakeDamage(damage)) return;
         this.SendCommand(new EnemyTakeDamageCommand(this, damage));
     }
 
-    /// <summary>
-    /// 由 EnemyTakeDamageCommand 调用，执行真正的扣血和死亡判断。
-    /// </summary>
-    public void ApplyDamage(int damage)
+    public void ApplyDamage(DamageInfo damage)
     {
-        if (!mIsAlive) return;
+        if (!CanTakeDamage(damage)) return;
+        var result = DamageResolver.Calculate(damage, mShieldLevel, mShieldCurrent);
+        mShieldCurrent = Mathf.Max(0f, mShieldCurrent - result.ShieldDamage);
+        mCurrentHP = Mathf.Max(0f, mCurrentHP - result.HealthDamage);
+        if (mCurrentHP <= 0f)
+        {
+            Die();
+            return;
+        }
 
-        mCurrentHP = Mathf.Max(0, mCurrentHP - damage);
-        if (mCurrentHP == 0) Die();
+        RegisterBossSummons();
+        if (!result.BrokeShield) return;
+        mTelegraph?.FlashShieldBreak();
+        if (mConfig.Category == EnemyCategory.Boss) return;
+        InterruptAttack(mConfig.Category == EnemyCategory.Elite ? 0.2f : 0.4f);
+    }
+
+    private bool CanTakeDamage(DamageInfo damage)
+    {
+        return mIsAlive && !mCombatCancelled && damage.Amount > 0f && damage.Faction == CombatFaction.Player
+            && this.GetModel<IGameStateModel>().State.Value == GameState.Playing;
+    }
+
+    public bool RepairShield(float amount)
+    {
+        if (!CanRepairShield || amount <= 0f) return false;
+        mShieldCurrent = Mathf.Min(mShieldMax, mShieldCurrent + amount);
+        return true;
     }
 
     private void Update()
     {
-        if (!mIsAlive || mTarget == null) return;
-        if (this.GetModel<IGameStateModel>().State.Value != GameState.Playing) return;
+        if (mRecycled) return;
+        var state = this.GetModel<IGameStateModel>().State.Value;
+        if (state == GameState.Paused) return;
+        if (state != GameState.Playing)
+        {
+            CancelCombat();
+            if (!mIsAlive) RecycleSelf();
+            return;
+        }
 
-        var offset = mTarget.position - transform.position;
-        offset.y = 0f;
-
-        // 使用平方距离省去开平方；进入攻击范围后停止移动，接触伤害由 OnTriggerStay 处理。
-        if (offset.sqrMagnitude <= mConfig.AttackRange * mConfig.AttackRange) return;
-
-        var position = transform.position + offset.normalized * (mConfig.MoveSpeed * Time.deltaTime);
-        position.x = Mathf.Clamp(position.x, -MapLimit, MapLimit);
-        position.z = Mathf.Clamp(position.z, -MapLimit, MapLimit);
-        transform.position = position;
-        transform.rotation = Quaternion.LookRotation(offset);
+        var deltaTime = Time.deltaTime;
+        if (!mIsAlive)
+        {
+            mDeathTimer -= deltaTime;
+            if (mVisual != null) mVisual.localScale = mVisualScale * (1f + (0.8f - mDeathTimer) * 0.55f);
+            if (mDeathTimer <= 0f) RecycleSelf();
+            return;
+        }
+        if (mCombatCancelled || mTarget == null) return;
+        TickAI(deltaTime);
+        RefreshSupportLinks();
+        mTelegraph?.RefreshShield(transform.position, mRadius, mShieldLevel, mShieldCurrent, mShieldMax, deltaTime);
     }
 
-    private void OnTriggerStay(Collider other)
+    public void CancelCombat()
     {
-        if (!mIsAlive || Time.time < mNextAttackTime) return;
-        if (other.GetComponent<Player>() == null) return;
-
-        // OnTriggerStay 每个物理帧都会触发，用绝对时间限制为配置中的攻击间隔。
-        mNextAttackTime = Time.time + mConfig.AttackInterval;
-        this.SendCommand(new PlayerTakeDamageCommand(mConfig.ContactDamage));
+        if (mCombatCancelled) return;
+        mCombatCancelled = true;
+        ClearSupportTargets();
+        ResetPose();
+        mTelegraph?.ResetVisuals();
+        mPhase = AIPhase.Chase;
+        mPhaseTime = 0f;
+        mSkillHit = true;
+        mBossRollPending = false;
     }
 
     private void Die()
     {
+        if (!mIsAlive) return;
         mIsAlive = false;
+        var split = !mChild && mConfig.AIType == EnemyAIType.Split;
+        // 先登记纯数据任务，再减 Alive；回池的母体绝不被延迟任务捕获。
+        if (split)
+            mSpawnSystem.ScheduleChildren(EnemyConfigTable.SlimeGreenId, 3, 0.8f,
+                transform.position, 10f, mSpawnMultiplier);
 
-        var model = this.GetModel<IEnemyModel>();
-        model.AliveCount.Value = Mathf.Max(0, model.AliveCount.Value - 1);
-        model.KillCount.Value++;
-
-        // 先广播死亡事件，让经验、音效等模块响应；最后才将实体回收到对象池。
+        CancelCombat();
+        if (mBody != null) mBody.enabled = false;
+        if (mObstacle != null) mObstacle.enabled = false;
+        mSpawnSystem.UnregisterEnemy(this);
         this.SendEvent(new EnemyDiedEvent
         {
             EnemyId = mConfig.Id,
             Position = transform.position,
-            ExpValue = mConfig.ExpValue
+            Gold = mDrops.Gold,
+            DropAmmo = mDrops.DropAmmo,
+            AmmoCaliber = mDrops.AmmoCaliber,
+            AmmoLevel = mDrops.AmmoLevel,
+            AmmoCount = mDrops.AmmoCount,
+            ShieldLevel = mDrops.ShieldLevel,
+            WeaponId = mDrops.WeaponId
         });
 
+        if (split)
+        {
+            mDeathTimer = 0.8f;
+            mTelegraph?.ShowCircle(transform.position, mRadius * 1.5f);
+        }
+        else RecycleSelf();
+    }
+
+    private void RecycleSelf()
+    {
+        if (mRecycled) return;
+        mRecycled = true;
         this.GetSystem<IGameObjectPoolSystem>().Recycle(mConfig.Id, gameObject);
+    }
+
+    private void ResetPose()
+    {
+        if (mVisual == null) return;
+        mVisual.localScale = mVisualScale;
+        mVisual.localPosition = mVisualPosition;
+    }
+
+    private void OnDisable()
+    {
+        // 场景清理不计作击杀；死亡路径在此之前已经注销。
+        if (mIsAlive) mSpawnSystem?.UnregisterEnemy(this);
+        mIsAlive = false;
+        mRecycled = true;
+        mTarget = null;
+        mDeathTimer = 0f;
+        ClearSupportTargets();
+        ResetPose();
+        mTelegraph?.ResetVisuals();
+        transform.localScale = mBaseScale;
     }
 }

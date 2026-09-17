@@ -14,7 +14,13 @@ namespace Game.UI
         // Kills：本局击杀总数。
         public int Kills;
 
-        // GoldEarned：本局结算获得的金币。
+        // DropGold：本局掉落入账（RunGold 统计）。
+        public int DropGold;
+
+        // ClearBonus：通关奖励（胜 500 / 败 0）。
+        public int ClearBonus;
+
+        // GoldEarned：本局结算获得的金币合计（DropGold + ClearBonus）。
         public int GoldEarned;
     }
 
@@ -41,7 +47,7 @@ namespace Game.UI
         {
             Title.text = Data.Victory ? "胜利！" : "失败……";
             KillText.text = $"击杀数：{Data.Kills}";
-            GoldText.text = $"获得金币：{Data.GoldEarned}";
+            GoldText.text = $"金币：掉落 {Data.DropGold} + 通关奖励 {Data.ClearBonus} = {Data.GoldEarned}";
 
             // 总金币从 Model 读取——结算命令已在面板打开前执行，这里读到的是入账后的值。
             TotalGoldText.text = $"总金币：{this.GetModel<IEconomyModel>().Gold.Value}";

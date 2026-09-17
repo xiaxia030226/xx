@@ -6,7 +6,26 @@ using UnityEngine;
 public enum EnemyAIType
 {
     // 直线追向玩家，进入攻击范围后停下并进行近战接触伤害。
-    ChaseMelee
+    ChaseMelee = 0,
+    SlimeCharge = 1,
+    ThrowStone = 2,
+    Archer = 3,
+    Flank = 4,
+    Poison = 5,
+    Slam = 6,
+    Teleport = 7,
+    Ram = 8,
+    ShieldDrummer = 9,
+    Split = 10,
+    SlimeKing = 11
+}
+
+public enum EnemyCategory
+{
+    Normal = 0,
+    Mechanism = 1,
+    Elite = 2,
+    Boss = 3
 }
 
 /// <summary>
@@ -45,13 +64,44 @@ public class EnemyConfig : ScriptableObject
     // mAttackRange：进入该距离后停止移动并开始接触攻击。
     [SerializeField] private float mAttackRange;
 
-    // mAIType：AI 行为类型，目前只有追击近战一种。
     [SerializeField] private EnemyAIType mAIType;
 
-    [Header("掉落与预制体")]
+    [Header("行为")]
 
-    // mExpValue：死亡时掉落经验水晶携带的经验值。
-    [SerializeField] private int mExpValue;
+    [SerializeField] private EnemyCategory mCategory;
+    [SerializeField, Range(0, 5)] private int mAttackLevel;
+    [SerializeField, Min(0f)] private float mWindup;
+    [SerializeField, Min(0f)] private float mRecovery;
+    [SerializeField, Min(0f)] private float mProjectileSpeed = 12f;
+    [SerializeField, Min(0f)] private float mChargeDistance;
+    [SerializeField, Min(0f)] private float mChargeSpeed;
+    [SerializeField, Min(0f)] private float mAreaRadius;
+    [SerializeField, Min(0f)] private float mTeleportDistance;
+
+    [Header("掉落")]
+
+    // mGoldMin / mGoldMax：死亡掉落金币的数量区间（含端点），掷点后乘以召唤倍率取整。
+    [SerializeField] private int mGoldMin;
+    [SerializeField] private int mGoldMax;
+
+    // mAmmoChance：掉落子弹包的概率（0~1），掷点时乘以召唤倍率但封顶 1。
+    [SerializeField, Range(0f, 1f)] private float mAmmoChance;
+
+    // mAmmoLevelMin / mAmmoLevelMax：子弹包穿甲等级区间（含端点，0~5）。
+    // 召唤倍率只提高掉落概率与数量，不提高等级上限。
+    [SerializeField] private int mAmmoLevelMin;
+    [SerializeField] private int mAmmoLevelMax;
+
+    // mAmmoCountMin / mAmmoCountMax：子弹包含弹量区间（含端点）。
+    [SerializeField] private int mAmmoCountMin;
+    [SerializeField] private int mAmmoCountMax;
+
+    [SerializeField, Range(0f, 1f)] private float mShieldChance;
+    [SerializeField, Range(0f, 1f)] private float mWeaponChance;
+    [SerializeField, Range(1, 5)] private int mShieldLevelMin;
+    [SerializeField, Range(1, 5)] private int mShieldLevelMax;
+
+    [Header("预制体")]
 
     // mPrefabPath：敌人预制体在 Resources 下的相对路径（不带扩展名）。
     // 保留字符串寻址是为后续迁移 Addressables 预留——届时把该值改为 AA 地址，
@@ -66,6 +116,25 @@ public class EnemyConfig : ScriptableObject
     public float AttackInterval => mAttackInterval;
     public float AttackRange => mAttackRange;
     public EnemyAIType AIType => mAIType;
-    public int ExpValue => mExpValue;
+    public EnemyCategory Category => mCategory;
+    public int AttackLevel => mAttackLevel;
+    public float Windup => mWindup;
+    public float Recovery => mRecovery;
+    public float ProjectileSpeed => mProjectileSpeed;
+    public float ChargeDistance => mChargeDistance;
+    public float ChargeSpeed => mChargeSpeed;
+    public float AreaRadius => mAreaRadius;
+    public float TeleportDistance => mTeleportDistance;
+    public float ShieldChance => mShieldChance;
+    public float WeaponChance => mWeaponChance;
+    public int ShieldLevelMin => mShieldLevelMin;
+    public int ShieldLevelMax => mShieldLevelMax;
+    public int GoldMin => mGoldMin;
+    public int GoldMax => mGoldMax;
+    public float AmmoChance => mAmmoChance;
+    public int AmmoLevelMin => mAmmoLevelMin;
+    public int AmmoLevelMax => mAmmoLevelMax;
+    public int AmmoCountMin => mAmmoCountMin;
+    public int AmmoCountMax => mAmmoCountMax;
     public string PrefabPath => mPrefabPath;
 }

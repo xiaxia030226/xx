@@ -14,11 +14,14 @@ public static class GameInput
     public static InputAction Skill2 { get; private set; }
     public static InputAction[] SwitchSlots { get; private set; }
     public static InputAction ScrollWeapon { get; private set; }
+    public static InputAction Reload { get; private set; }
+    public static InputAction CycleBulletLevel { get; private set; }
+    public static InputAction CallNextWave { get; private set; }
     public static InputAction Pause { get; private set; }
     public static InputAction BuildView { get; private set; }
     public static InputAction DebugDamage { get; private set; }
     public static InputAction DebugHeal { get; private set; }
-    public static InputAction DebugExp { get; private set; }
+    public static InputAction DebugAmmo { get; private set; }
 
     private static bool mInitialized;
 
@@ -53,11 +56,14 @@ public static class GameInput
 
         ScrollWeapon = new InputAction("ScrollWeapon", InputActionType.Value, "<Mouse>/scroll",
             expectedControlType: "Vector2");
+        Reload = new InputAction("Reload", InputActionType.Button, "<Keyboard>/r");
+        CycleBulletLevel = new InputAction("CycleBulletLevel", InputActionType.Button, "<Keyboard>/b");
+        CallNextWave = new InputAction("CallNextWave", InputActionType.Button, "<Keyboard>/f");
         Pause = new InputAction("Pause", InputActionType.Button, "<Keyboard>/escape");
         BuildView = new InputAction("BuildView", InputActionType.Button, "<Keyboard>/tab");
         DebugDamage = new InputAction("DebugDamage", InputActionType.Button, "<Keyboard>/k");
         DebugHeal = new InputAction("DebugHeal", InputActionType.Button, "<Keyboard>/h");
-        DebugExp = new InputAction("DebugExp", InputActionType.Button, "<Keyboard>/l");
+        DebugAmmo = new InputAction("DebugAmmo", InputActionType.Button, "<Keyboard>/n");
 
         EnableAll();
 
@@ -85,10 +91,13 @@ public static class GameInput
         Skill2.Enable();
         foreach (var slot in SwitchSlots) slot.Enable();
         ScrollWeapon.Enable();
+        Reload.Enable();
+        CycleBulletLevel.Enable();
+        CallNextWave.Enable();
         Pause.Enable();
         BuildView.Enable();
         DebugDamage.Enable();
         DebugHeal.Enable();
-        DebugExp.Enable();
+        DebugAmmo.Enable();
     }
 }

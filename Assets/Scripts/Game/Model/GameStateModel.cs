@@ -11,7 +11,8 @@ public enum GameState
     LevelSelect,
     Playing,
     Paused,
-    Result
+    Result,
+    SafeLoot
 }
 
 /// <summary>
@@ -24,6 +25,10 @@ public interface IGameStateModel : IModel
 
     // SelectedLevel：选关界面写入的关卡编号，进入战斗场景时按它加载关卡内容。
     BindableProperty<int> SelectedLevel { get; }
+
+    // SummonMultiplier：F 提前召唤下一波带来的掉落倍率（1.5→1.75→2.0）；
+    // 波次自然到点启动时重置为 1.0。敌人出生时记录当时的倍率用于掉落掷点。
+    BindableProperty<float> SummonMultiplier { get; }
 }
 
 /// <summary>
@@ -35,6 +40,7 @@ public class GameStateModel : AbstractModel, IGameStateModel
     public BindableProperty<GameState> State { get; } = new BindableProperty<GameState>(GameState.Boot);
     public BindableProperty<int> CurrentWave { get; } = new BindableProperty<int>(0);
     public BindableProperty<int> SelectedLevel { get; } = new BindableProperty<int>(1);
+    public BindableProperty<float> SummonMultiplier { get; } = new BindableProperty<float>(1f);
 
     /// <summary>
     /// Model 注册时调用，后续需要读取存档或初始化关卡状态时可放在这里。

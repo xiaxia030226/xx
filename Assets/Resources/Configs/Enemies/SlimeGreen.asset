@@ -20,5 +20,24 @@ MonoBehaviour:
   mAttackInterval: 1
   mAttackRange: 1
   mAIType: 0
-  mExpValue: 1
-  mPrefabPath: Prefabs/GreenSlime
+  mCategory: 0
+  mAttackLevel: 0
+  mWindup: 0
+  mRecovery: 0.35
+  mProjectileSpeed: 12
+  mChargeDistance: 0
+  mChargeSpeed: 0
+  mAreaRadius: 0
+  mTeleportDistance: 0
+  mGoldMin: 1
+  mGoldMax: 1
+  mAmmoChance: 0.55
+  mAmmoLevelMin: 0
+  mAmmoLevelMax: 1
+  mAmmoCountMin: 10
+  mAmmoCountMax: 20
+  mShieldChance: 0.03
+  mWeaponChance: 0.01
+  mShieldLevelMin: 1
+  mShieldLevelMax: 1
+  mPrefabPath: Prefabs/StageThree/E01

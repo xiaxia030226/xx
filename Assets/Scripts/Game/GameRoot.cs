@@ -3,370 +3,246 @@ using QFramework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-/// <summary>
-/// 当前阶段的场景启动入口。
-/// 负责初始化输入和架构、创建玩家与相机、驱动系统推进，并监听战斗事件。
-/// partial：环境搭建（灯光/地面/围墙/挂点）拆分到 GameRoot.Environment.cs，本文件专注流程编排。
-/// </summary>
 public partial class GameRoot : MonoBehaviour, IController
 {
-    // BattleRoot：场景中所有战斗物体的父节点，供其他脚本创建物体时统一挂载。
     public static Transform BattleRoot { get; private set; }
-
-    // PlayerInstance：玩家实例的公开引用，供敌人追踪与水晶吸附等需要玩家位置的脚本使用。
     public static Player PlayerInstance { get; private set; }
-
-    // mPickupRoot：拾取物（经验水晶）的父节点，保持场景层级整洁。
+    public static StageEnvironment Environment { get; private set; }
+    private static GameRoot sCurrent;
+    private StageConfig mStage;
     private Transform mPickupRoot;
-
-    // mBulletRoot：子弹的父节点，由 CreateBattleEnvironment 创建，装配武器系统时传入。
     private Transform mBulletRoot;
-
-    // mEnemySpawnSystem：刷怪系统缓存，每帧调用 Tick 推进波次。
     private IEnemySpawnSystem mEnemySpawnSystem;
-
-    // mWeaponSystem：武器系统缓存，每帧调用 Tick 恢复能量并更新冷却。
     private IWeaponSystem mWeaponSystem;
-
-    // mExpCrystalPrefab：经验水晶预制体缓存，首次生成时从 Resources 加载一次。
-    private GameObject mExpCrystalPrefab;
-
-    // mPendingLevelUps：等待玩家选择强化的升级次数（一次拾取多个水晶可能连升多级）。
-    private int mPendingLevelUps;
-
-    // mResultEntered：本局是否已进入过结算，防止胜利与死亡信号重复触发结算。
     private bool mResultEntered;
+    private GameState mBeforePause;
 
     public IArchitecture GetArchitecture() => GameArchitecture.Interface;
 
-    /// <summary>
-    /// 场景加载时执行一次：按顺序初始化输入→架构→战场→玩家→系统→事件→HUD→第一波。
-    /// 顺序很重要——后面的步骤依赖前面创建好的对象。
-    /// </summary>
     private void Awake()
     {
-        // 第 1 步：初始化输入系统并触发架构单例创建。
+        sCurrent = this;
         GameInput.Init();
-        _ = GameArchitecture.Interface;
-
-        // 第 2 步：用项目配置替换 UIKit 默认配置，让面板类型自动映射到 Resources/UI 路径。
         UIKit.Config = new GameUIKitConfig();
-
-        // 第 3 步：跨场景重入清理——清空对象池（池里可能残留上局场景的无效引用）、
-        // 重置各 Model 数据与流程字段，并把状态推进到战斗进行中。
-        this.GetSystem<IGameObjectPoolSystem>().ClearAll();
-        this.GetModel<IPlayerModel>().Reset();
-        this.GetModel<IEnemyModel>().Reset();
-        var stateModel = this.GetModel<IGameStateModel>();
-        stateModel.CurrentWave.Value = 0;
-        stateModel.State.Value = GameState.Playing;
-        mPendingLevelUps = 0;
-        mResultEntered = false;
-
-        // 第 4 步：搭建战场环境（地面、围墙、挂点）、创建玩家、设置跟随相机。
-        // 环境搭建的实现见 GameRoot.Environment.cs（partial 拆分）。
-        CreateDirectionalLight();
-        CreateBattleEnvironment();
-        PlayerInstance = CreatePlayer();
-        CreateMainCamera(PlayerInstance.transform);
-
-        // 第 5 步：初始化刷怪与武器系统，并注册经验水晶对象池。
-        SetupSystems();
-
-        // 第 6 步：监听战斗事件——敌人死亡掉水晶、玩家升级弹面板、面板关闭继续升级。
-        RegisterBattleEvents();
-
-        // 第 7 步：打开战斗 HUD（血条与武器格子条，武器格子已并入 GameHUD）。
-        UIKit.OpenPanel<GameHUD>();
-
-        // 第 8 步：开始第一波敌人，战斗正式启动。
-        mEnemySpawnSystem.StartWave(1);
-
-        // 第 9 步：注册调试按键（K 扣血、H 回血、L 加经验）。
-        RegisterDebugKeys();
+        Time.timeScale = 1f;
+        var state = this.GetModel<IGameStateModel>();
+        state.State.Value = GameState.Boot;
+        try
+        {
+            mStage = StageConfigTable.Get(state.SelectedLevel.Value);
+            this.GetSystem<IGameObjectPoolSystem>().ClearAll();
+            this.GetModel<IPlayerModel>().Reset();
+            this.GetModel<IEnemyModel>().Reset();
+            this.GetModel<IBulletInventoryModel>().Reset();
+            this.GetModel<IEconomyModel>().RunGold.Value = 0;
+            state.CurrentWave.Value = 0;
+            state.SummonMultiplier.Value = 1f;
+            mResultEntered = false;
+            CreateDirectionalLight();
+            CreateBattleEnvironment();
+            PlayerInstance = CreatePlayer();
+            CreateMainCamera(PlayerInstance.transform);
+            SetupSystems();
+            RegisterBattleEvents();
+            state.State.Value = GameState.Playing;
+            UIKit.OpenPanel<GameHUD>();
+            mEnemySpawnSystem.StartWave(1);
+        }
+        catch (System.Exception error)
+        {
+            state.State.Value = GameState.Boot;
+            enabled = false;
+            Debug.LogError($"[GameRoot] 战斗装配失败，请先执行 Game/阶段三/校验资源：{error}");
+        }
     }
 
-    /// <summary>
-    /// 每帧调用：驱动刷怪和武器两个非 MonoBehaviour 系统推进逻辑。
-    /// System 不会自动 Tick，必须由外部（GameRoot）每帧手动调用。
-    /// </summary>
     private void Update()
     {
-        // ESC：战斗中打开暂停面板并冻结时间；暂停中再按一次恢复。
+        var state = this.GetModel<IGameStateModel>();
         if (GameInput.Pause.WasPressedThisFrame())
         {
-            var state = this.GetModel<IGameStateModel>().State.Value;
-            if (state == GameState.Playing)
-            {
-                PauseGame();
-            }
-            else if (state == GameState.Paused)
-            {
-                ResumeGame();
-            }
+            if (state.State.Value == GameState.Playing || state.State.Value == GameState.SafeLoot) PauseGame();
+            else if (state.State.Value == GameState.Paused) ResumeGame();
         }
-
-        // deltaTime：本帧时间间隔，传给两个 System 用于计时推进。
-        // 暂停时 timeScale=0，deltaTime 为 0，两个系统空转无害。
-        var deltaTime = Time.deltaTime;
-
-        // 刷怪系统：推进生成计时、检测是否清场、过渡到下一波。
-        mEnemySpawnSystem.Tick(deltaTime);
-
-        // 武器系统：推进每个武器的攻击冷却与能量/弹药恢复。
-        mWeaponSystem.Tick(deltaTime);
+        if (state.State.Value != GameState.Playing) return;
+        if (GameInput.CallNextWave.WasPressedThisFrame()) mEnemySpawnSystem.CallNextWaveEarly();
+        HandleDebugKeys();
+        mEnemySpawnSystem.Tick(Time.deltaTime);
+        mWeaponSystem.Tick(Time.deltaTime);
     }
 
-    // ==================== 战场搭建（见 GameRoot.Environment.cs） ====================
-
-    // ==================== 玩家与相机 ====================
-
-    /// <summary>
-    /// 从预制体创建玩家实例。
-    /// Player.prefab 已挂好 Capsule、Rigidbody(kinematic)、CapsuleCollider(trigger)、
-    /// Player 脚本和 DirectionIndicator 子物体。
-    /// </summary>
     private Player CreatePlayer()
     {
-        // 第一步：从 Resources/Prefabs/Player 加载预制体并实例化。
-        var playerPrefab = Resources.Load<GameObject>("Prefabs/Player");
-        var playerObj = Instantiate(playerPrefab);
-        playerObj.name = "Player";
-
-        // 第二步：挂到 BattleRoot 下，设置世界坐标为地面中心。
-        playerObj.transform.SetParent(BattleRoot, false);
-        playerObj.transform.position = new Vector3(0f, 1f, 0f);
-
-        // 第三步：预制体上已挂 Player 组件，直接获取返回。
-        return playerObj.GetComponent<Player>();
+        var player = Instantiate(Resources.Load<GameObject>("Prefabs/Player"), BattleRoot);
+        player.name = "Player";
+        player.transform.position = new Vector3(0f, 1f, 0f);
+        return player.GetComponent<Player>();
     }
 
-    /// <summary>
-    /// 创建主相机并挂载跟随逻辑。
-    /// 相机以 12 米高、9 米后的俯视角度跟踪玩家。
-    /// 注意：场景中不应保留默认相机，相机的创建与跟随完全由本方法负责。
-    /// </summary>
     private void CreateMainCamera(Transform target)
     {
-        // 第一步：创建相机物体，tag 标记为 MainCamera 以便 Camera.main 能自动找到。
         var go = new GameObject("Main Camera");
         go.transform.SetParent(transform, false);
         go.tag = "MainCamera";
-
-        // 第二步：相机初始放在玩家上方偏后，形成俯视视角。
         go.transform.position = target.position + new Vector3(0f, 12f, -9f);
         go.transform.rotation = Quaternion.LookRotation(target.position - go.transform.position);
-
-        // 第三步：设置视场角与远近裁剪面，保证 100 米内场景可见。
-        var cam = go.AddComponent<Camera>();
-        cam.fieldOfView = 50f;
-        cam.nearClipPlane = 0.3f;
-        cam.farClipPlane = 200f;
-
-        // 第四步：AudioListener 挂在新建的相机上，3D 音效以相机位置为听者。
-        // 场景中只保留这一个监听器，因此场景里不应再有默认相机。
+        var camera = go.AddComponent<Camera>();
+        camera.fieldOfView = 50f;
+        camera.nearClipPlane = 0.3f;
+        camera.farClipPlane = 200f;
         go.AddComponent<AudioListener>();
-
-        // 第五步：挂载 CameraFollow 脚本，Target 设为玩家，Update 里自动跟随。
-        var follow = go.AddComponent<CameraFollow>();
-        follow.Target = target;
+        go.AddComponent<CameraFollow>().Target = target;
     }
 
-    // ==================== 系统与对象池 ====================
-
-    /// <summary>
-    /// 初始化刷怪与武器系统，并注册经验水晶对象池。
-    /// 这一步必须在玩家创建之后、HUD 打开之前执行。
-    /// </summary>
     private void SetupSystems()
     {
-        // 从架构获取系统实例并缓存，供 Update 每帧驱动。
         mEnemySpawnSystem = this.GetSystem<IEnemySpawnSystem>();
         mWeaponSystem = this.GetSystem<IWeaponSystem>();
-
-        // enemyRoot：场景中敌人挂载的父节点，由 CreateBattleEnvironment 创建。
-        var enemyRoot = BattleRoot.Find("EnemyRoot");
-
-        // Setup：刷怪系统记录玩家位置作为生成参照；武器系统记录攻击者与子弹挂载点。
-        mEnemySpawnSystem.Setup(PlayerInstance.transform, enemyRoot);
         mWeaponSystem.Setup(PlayerInstance.transform, mBulletRoot);
-
-        // 注册经验水晶对象池：预创建 16 个隐藏水晶，拾取与掉落循环复用、永不销毁。
-        this.GetSystem<IGameObjectPoolSystem>().Register("exp_crystal", CreateExpCrystal, 16);
+        mEnemySpawnSystem.Setup(PlayerInstance.transform, BattleRoot.Find("EnemyRoot"), mStage, Environment);
+        RegisterPickup(GoldPickup.PoolKey, "Prefabs/StageThree/GoldPickup");
+        RegisterPickup(AmmoPackPickup.PoolKey, "Prefabs/StageThree/AmmoPackPickup");
+        RegisterPickup(ShieldPickup.PoolKey, "Prefabs/StageThree/ShieldPickup");
+        RegisterPickup(WeaponPickup.PoolKey, "Prefabs/StageThree/WeaponPickup");
     }
 
-    /// <summary>
-    /// 工厂方法：创建经验水晶实例。
-    /// 从预制体实例化一个亮绿色小方块，预制体上已挂好 ExperienceCrystal 脚本和碰撞体。
-    /// </summary>
-    private GameObject CreateExpCrystal()
+    private void RegisterPickup(string key, string path)
     {
-        // 首次调用时从 Resources/Prefabs/ExpCrystal 加载预制体并缓存。
-        if (mExpCrystalPrefab == null)
-        {
-            mExpCrystalPrefab = Resources.Load<GameObject>("Prefabs/ExpCrystal");
-        }
-
-        // 从预制体克隆新实例：ExperienceCrystal 脚本、颜色、碰撞体均已在预制体上配好。
-        var crystalObject = Instantiate(mExpCrystalPrefab);
-        crystalObject.name = "ExpCrystal";
-        return crystalObject;
+        var prefab = Resources.Load<GameObject>(path);
+        if (prefab == null) throw new System.InvalidOperationException($"缺少拾取物：{path}");
+        this.GetSystem<IGameObjectPoolSystem>().Register(key, () => Instantiate(prefab, mPickupRoot), 16);
     }
 
-    // ==================== 战斗事件监听 ====================
-
-    /// <summary>
-    /// 注册三个战斗事件监听并绑定到此 GameObject 的生命周期。
-    /// GameObject 销毁时自动取消订阅，防止内存泄漏。
-    /// </summary>
     private void RegisterBattleEvents()
     {
-        // 事件 1：敌人死亡 → 在死亡位置生成经验水晶。
-        this.RegisterEvent<EnemyDiedEvent>(OnEnemyDied)
-            .UnRegisterWhenGameObjectDestroyed(gameObject);
-
-        // 事件 2：玩家升级 → 累计待处理次数；若面板未打开则打开升级三选一。
-        this.RegisterEvent<LevelUpEvent>(OnLevelUp)
-            .UnRegisterWhenGameObjectDestroyed(gameObject);
-
-        // 事件 3：升级面板关闭 → 若还有未处理的升级（连升多级），立即再开面板。
-        this.RegisterEvent<LevelUpPanelClosedEvent>(OnLevelUpPanelClosed)
-            .UnRegisterWhenGameObjectDestroyed(gameObject);
-
-        // 事件 4：全部波次清空 → 进入胜利结算。
-        this.RegisterEvent<AllWavesClearedEvent>(_ => EnterResult(true))
-            .UnRegisterWhenGameObjectDestroyed(gameObject);
-
-        // 事件 5：玩家死亡 → 进入失败结算。
-        this.RegisterEvent<PlayerDiedEvent>(_ => EnterResult(false))
-            .UnRegisterWhenGameObjectDestroyed(gameObject);
+        this.RegisterEvent<EnemyDiedEvent>(OnEnemyDied).UnRegisterWhenGameObjectDestroyed(gameObject);
+        this.RegisterEvent<AllWavesClearedEvent>(_ => EnterSafeLoot()).UnRegisterWhenGameObjectDestroyed(gameObject);
+        this.RegisterEvent<PlayerDiedEvent>(_ => EnterResult(false)).UnRegisterWhenGameObjectDestroyed(gameObject);
     }
 
-    /// <summary>
-    /// 敌人死亡事件回调：从对象池取水晶放在死亡位置，并注入经验值与玩家引用。
-    /// </summary>
     private void OnEnemyDied(EnemyDiedEvent e)
     {
-        // 从对象池取出一个水晶，放在敌人死亡位置上方半米处，挂到 PickupRoot 下。
-        var crystalObject = this.GetSystem<IGameObjectPoolSystem>()
-            .Spawn("exp_crystal", e.Position + Vector3.up * 0.5f, Quaternion.identity, mPickupRoot);
-
-        // 调用 OnSpawn 重置水晶：绑定经验值与玩家引用，激活吸附拾取逻辑。
-        crystalObject.GetComponent<ExperienceCrystal>().OnSpawn(e.ExpValue, PlayerInstance.transform);
-    }
-
-    /// <summary>
-    /// 玩家升级事件回调：累加待处理升级次数。
-    /// 面板未打开时立即弹出；已打开时不重复建（复用面板，OnOpen 会刷新选项）。
-    /// </summary>
-    private void OnLevelUp(LevelUpEvent e)
-    {
-        // mPendingLevelUps 加一：记录等待玩家选择的升级次数。
-        mPendingLevelUps++;
-
-        // 面板未打开 → 用 PopUI 层级打开，保证显示在 GameHUD 之上。
-        if (UIKit.GetPanel<LevelUpPanel>() == null)
+        var pool = this.GetSystem<IGameObjectPoolSystem>();
+        var position = new Vector3(e.Position.x, 0.4f, e.Position.z);
+        if (e.Gold > 0)
         {
-            UIKit.OpenPanel<LevelUpPanel>(UILevel.PopUI);
+            var pickup = pool.Spawn(GoldPickup.PoolKey, position, Quaternion.identity, mPickupRoot);
+            pickup.GetComponent<GoldPickup>().OnSpawn(e.Gold, PlayerInstance.transform);
+        }
+        if (e.DropAmmo && e.AmmoCount > 0)
+        {
+            var pickup = pool.Spawn(AmmoPackPickup.PoolKey, position + Vector3.right * 0.5f, Quaternion.identity, mPickupRoot);
+            pickup.GetComponent<AmmoPackPickup>().OnSpawn(e.AmmoCaliber, e.AmmoLevel, e.AmmoCount, PlayerInstance.transform);
+        }
+        if (e.ShieldLevel > 0)
+        {
+            var pickup = pool.Spawn(ShieldPickup.PoolKey, position + Vector3.left * 0.5f, Quaternion.identity, mPickupRoot);
+            pickup.GetComponent<ShieldPickup>().OnSpawn(e.ShieldLevel, ShieldConfigTable.Get(e.ShieldLevel).Capacity, PlayerInstance.transform);
+        }
+        if (!string.IsNullOrEmpty(e.WeaponId))
+        {
+            var pickup = pool.Spawn(WeaponPickup.PoolKey, position + Vector3.forward * 0.5f, Quaternion.identity, mPickupRoot);
+            pickup.GetComponent<WeaponPickup>().OnSpawn(e.WeaponId, PlayerInstance.transform);
         }
     }
 
-    /// <summary>
-    /// 升级面板关闭事件回调：处理剩余升级。
-    /// 玩家每完成一次三选一，面板关闭触发本回调；还有待处理升级就再开。
-    /// </summary>
-    private void OnLevelUpPanelClosed(LevelUpPanelClosedEvent e)
+    private void EnterSafeLoot()
     {
-        // 完成一次强化选择，待处理次数减一。
-        mPendingLevelUps--;
-
-        // 仍有待处理 → 再弹一次面板让玩家继续选择强化。
-        if (mPendingLevelUps > 0)
-        {
-            UIKit.OpenPanel<LevelUpPanel>(UILevel.PopUI);
-        }
+        if (mResultEntered || this.GetModel<IGameStateModel>().State.Value != GameState.Playing) return;
+        this.GetModel<IGameStateModel>().State.Value = GameState.SafeLoot;
+        StopCombat();
     }
 
-    // ==================== 流程控制 ====================
+    public static void CompleteSafeLoot()
+    {
+        if (sCurrent == null || GameArchitecture.Interface.GetModel<IGameStateModel>().State.Value != GameState.SafeLoot) return;
+        sCurrent.EnterResult(true);
+    }
 
-    /// <summary>
-    /// 暂停战斗：状态切到 Paused，冻结时间并打开暂停面板。
-    /// </summary>
+    private void StopCombat()
+    {
+        mWeaponSystem?.CancelReloads();
+        mEnemySpawnSystem?.CancelPendingSpawns();
+        if (BattleRoot != null)
+        {
+            foreach (var bullet in BattleRoot.GetComponentsInChildren<Bullet>()) bullet.CancelFlight();
+            foreach (var poison in BattleRoot.GetComponentsInChildren<PoisonArea>()) poison.Recycle();
+            foreach (var telegraph in BattleRoot.GetComponentsInChildren<EnemyTelegraph>()) telegraph.ResetVisuals();
+        }
+        if (PlayerInstance != null) PlayerInstance.ClearPoisonSources();
+    }
+
     private void PauseGame()
     {
-        this.GetModel<IGameStateModel>().State.Value = GameState.Paused;
+        var state = this.GetModel<IGameStateModel>();
+        mBeforePause = state.State.Value;
+        state.State.Value = GameState.Paused;
         Time.timeScale = 0f;
         UIKit.OpenPanel<PausePanel>(UILevel.PopUI);
     }
 
-    /// <summary>
-    /// 从暂停恢复战斗：关闭暂停面板并恢复时间流速。供 ESC 与暂停面板的“继续”按钮调用。
-    /// </summary>
     public static void ResumeGame()
     {
-        GameArchitecture.Interface.GetModel<IGameStateModel>().State.Value = GameState.Playing;
+        if (sCurrent == null) return;
+        var state = GameArchitecture.Interface.GetModel<IGameStateModel>();
+        if (state.State.Value != GameState.Paused) return;
+        state.State.Value = sCurrent.mBeforePause;
         Time.timeScale = 1f;
         UIKit.ClosePanel<PausePanel>();
     }
 
-    /// <summary>
-    /// 进入结算：按胜负结算金币（胜利 500 + 击杀×2；失败仅击杀×2），然后打开结算面板。
-    /// </summary>
-    /// <param name="victory">true 为通关胜利，false 为死亡失败。</param>
     private void EnterResult(bool victory)
     {
-        // 同一局可能先后收到多个结束信号，只结算一次，防止金币重复入账。
         if (mResultEntered) return;
         mResultEntered = true;
-
         this.GetModel<IGameStateModel>().State.Value = GameState.Result;
-
-        // 结算本局金币：通过命令入账，Model 的订阅会自动写入存档。
-        var kills = this.GetModel<IEnemyModel>().KillCount.Value;
-        var gold = (victory ? 500 : 0) + kills * 2;
-        this.SendCommand(new AddGoldCommand(gold));
-
-        // 把本局战绩传给结算面板展示。
+        StopCombat();
+        var dropGold = this.GetModel<IEconomyModel>().RunGold.Value;
+        var clearBonus = victory ? mStage.ClearBonus : 0;
+        this.SendCommand(new AddGoldCommand(dropGold + clearBonus));
         UIKit.OpenPanel<ResultPanel>(UILevel.PopUI, new ResultPanelData
         {
             Victory = victory,
-            Kills = kills,
-            GoldEarned = gold
+            Kills = this.GetModel<IEnemyModel>().KillCount.Value,
+            DropGold = dropGold,
+            ClearBonus = clearBonus,
+            GoldEarned = dropGold + clearBonus
         });
     }
 
-    /// <summary>
-    /// 返回主菜单：恢复时间流速、关闭战斗场景的全部面板，再加载主菜单场景。
-    /// 供暂停面板与结算面板的“返回主菜单”按钮调用。
-    /// </summary>
     public static void ReturnToMainMenu()
     {
-        // 恢复时间流速：从暂停状态返回时游戏处于冻结状态，必须先解冻。
+        GameArchitecture.Interface.GetModel<IGameStateModel>().State.Value = GameState.MainMenu;
+        if (sCurrent != null) sCurrent.StopCombat();
         Time.timeScale = 1f;
-
-        // 关闭战斗中的所有面板，避免跨场景残留。
         UIKit.ClosePanel<GameHUD>();
-        UIKit.ClosePanel<LevelUpPanel>();
         UIKit.ClosePanel<PausePanel>();
         UIKit.ClosePanel<ResultPanel>();
-
         SceneManager.LoadScene("MainMenu");
     }
 
-    // ==================== 调试按键 ====================
+    private void OnDestroy()
+    {
+        if (sCurrent != this) return;
+        mEnemySpawnSystem?.CancelPendingSpawns();
+        sCurrent = null;
+        BattleRoot = null;
+        PlayerInstance = null;
+        Environment = null;
+        Time.timeScale = 1f;
+    }
 
-    /// <summary>
-    /// 注册阶段一数据链路测试键。
-    /// 只在编辑器和 Development Build 中编译，不进入正式发布包。
-    /// K 扣血、H 回血——验证 HP → HUD 整条数据链路。
-    /// L 加 5 经验——验证经验累积 → 升级 → 三选一弹窗的完整升级链路。
-    /// </summary>
-    private void RegisterDebugKeys()
+    private void HandleDebugKeys()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        GameInput.DebugDamage.performed += _ => this.SendCommand(new PlayerTakeDamageCommand(10));
-        GameInput.DebugHeal.performed += _ => this.SendCommand(new PlayerHealCommand(10));
-        GameInput.DebugExp.performed += _ => this.SendCommand(new GainExpCommand(5));
+        if (GameInput.DebugDamage.WasPressedThisFrame())
+            this.SendCommand(new PlayerTakeDamageCommand(new DamageInfo(10f, 0, CombatFaction.Enemy)));
+        if (GameInput.DebugHeal.WasPressedThisFrame()) this.SendCommand(new PlayerHealCommand(10f));
+        if (GameInput.DebugAmmo.WasPressedThisFrame())
+        {
+            this.SendCommand(new AddBulletsCommand(Caliber.S, 0, 60));
+            this.SendCommand(new AddBulletsCommand(Caliber.AR, 0, 60));
+        }
 #endif
     }
 }

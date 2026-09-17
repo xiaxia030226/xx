@@ -3,13 +3,14 @@ using UnityEngine;
 
 /// <summary>
 /// 子弹配置查询表。配置数据以 ScriptableObject 资产的形式存放在
-/// Resources/Configs/Weapons/ 文件夹下（与武器配置同目录），首次访问时一次性加载填充。
-/// 新增子弹：在该文件夹右键 Create → Game → 子弹配置，填好字段即可，代码零改动。
+/// Resources/Configs/Bullets/ 文件夹下（由 Editor 菜单一键生成 18 个：3 口径 × 6 等级），
+/// 首次访问时一次性加载填充。
+/// 新增口径或调整等级范围：改生成器后重新生成即可，代码零改动。
 /// </summary>
 public static class BulletConfigTable
 {
-    // ConfigsFolder：子弹配置资产在 Resources 下的相对文件夹路径（与武器配置同目录）。
-    private const string ConfigsFolder = "Configs/Weapons";
+    // ConfigsFolder：子弹配置资产在 Resources 下的相对文件夹路径（独立于武器配置目录）。
+    private const string ConfigsFolder = "Configs/Bullets";
 
     // sConfigs：懒加载的配置字典（子弹 id → 配置资产），首次访问时从 Resources 加载填充。
     private static Dictionary<string, BulletConfig> sConfigs;
@@ -42,8 +43,7 @@ public static class BulletConfigTable
     }
 
     /// <summary>
-    /// 从 Resources/Configs/Weapons 加载全部子弹配置资产并填入字典。
-    /// LoadAll 按类型过滤，同文件夹下的武器配置资产不会被误读进来。
+    /// 从 Resources/Configs/Bullets 加载全部子弹配置资产并填入字典。
     /// </summary>
     private static Dictionary<string, BulletConfig> LoadAll()
     {

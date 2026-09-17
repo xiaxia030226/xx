@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: MachineGun
   m_EditorClassIdentifier: 
   mId: machinegun
-  mName: 普通机枪
+  mName: "\u666E\u901A\u673A\u67AA"
+  mCaliber: 1
   mMagazine: 50
   mReloadTime: 2.5
+  mDurabilityMax: 240
   mDamage: 6
   mRoundsPerMinute: 600
   mIsAutomatic: 1
-  mBulletId: bullet_normal

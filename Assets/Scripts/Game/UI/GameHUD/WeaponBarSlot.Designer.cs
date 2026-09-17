@@ -13,12 +13,18 @@ namespace Game.UI
 		[SerializeField] public TMPro.TextMeshProUGUI Number;
 		[SerializeField] public TMPro.TextMeshProUGUI WeaponBarName;
 		[SerializeField] public UnityEngine.UI.Image ResourceBarFill;
+		[SerializeField] public TMPro.TextMeshProUGUI AmmoText;
+		[SerializeField] public TMPro.TextMeshProUGUI DurabilityText;
+		[SerializeField] public UnityEngine.UI.Image ReloadMask;
 
 		public void Clear()
 		{
 			Number = null;
 			WeaponBarName = null;
 			ResourceBarFill = null;
+			AmmoText = null;
+			DurabilityText = null;
+			ReloadMask = null;
 		}
 
 		public override string ComponentName

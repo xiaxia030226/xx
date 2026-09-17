@@ -1,58 +1,117 @@
+using QFramework;
 using UnityEngine;
 
-/// <summary>
-/// 枪械武器：手枪与机枪共用的实现，差异全部由 WeaponConfig 数据驱动。
-/// 手枪：IsAutomatic=false，点击单发，攻击间隔为固定的 SemiAutoInterval；
-/// 机枪：IsAutomatic=true，长按连发，攻击间隔由 RPM 换算（60 / RPM）。
-/// 命中伤害 = 武器配置伤害 + 子弹配置伤害。
-/// </summary>
 public class GunWeapon : WeaponBase
 {
-    // SemiAutoInterval：非自动武器（手枪）的固定攻击间隔（秒），防止极端连点。
     private const float SemiAutoInterval = 0.15f;
-
-    // MuzzleOffset：子弹出膛位置相对持有者的偏移，前方 0.8 米、高 0.5 米，避免贴脸自碰。
-    private static readonly Vector3 MuzzleOffset = new Vector3(0f, 0.5f, 0.8f);
-
-    // mBulletConfig：本武器使用的子弹配置（伤害、速度、对象池 key）。
-    private readonly BulletConfig mBulletConfig;
-
-    // mPool：对象池系统引用，发射时取子弹、构造时注册子弹池。
+    private readonly IArchitecture mArchitecture;
     private readonly IGameObjectPoolSystem mPool;
-
-    // mBulletParent：子弹实例的挂载点（BulletRoot），保持 Hierarchy 整洁。
     private readonly Transform mBulletParent;
+    private bool mReloading;
+    private float mReloadTimer;
+    private int mPendingLevel;
+    private int mPendingCount;
 
-    /// <summary>
-    /// 从武器配置与子弹配置组装一把枪。
-    /// 基类参数映射：弹药型资源（弹夹容量）、每发耗 1 发子弹、耗尽后按 ReloadTime 换弹。
-    /// </summary>
-    public GunWeapon(WeaponConfig config, BulletConfig bulletConfig,
-        IGameObjectPoolSystem pool, Transform bulletParent)
-        : base(config.Id, config.Name, WeaponResourceType.Ammo,
-            config.Magazine, 1f, 0f, config.ReloadTime,
+    public Caliber Caliber { get; }
+    public float ReloadTime { get; }
+    public int LoadedLevel { get; private set; }
+    public int NextLoadLevel { get; private set; }
+    public bool IsReloading => mReloading;
+
+    public GunWeapon(WeaponConfig config, IArchitecture architecture, Transform bulletParent)
+        : base(config.Id, config.Name, config.Magazine,
             config.RoundsPerMinute > 0f ? 60f / config.RoundsPerMinute : SemiAutoInterval,
-            config.Damage, config.IsAutomatic)
+            config.Damage, config.DurabilityMax, config.IsAutomatic)
     {
-        mBulletConfig = bulletConfig;
-        mPool = pool;
+        Caliber = config.Caliber;
+        ReloadTime = config.ReloadTime;
+        mArchitecture = architecture;
+        mPool = architecture.GetSystem<IGameObjectPoolSystem>();
         mBulletParent = bulletParent;
     }
 
-    /// <summary>
-    /// 发射一颗子弹：从对象池取出，摆到枪口位置，按持有者朝向初始化飞行参数。
-    /// </summary>
+    public void CycleNextLoadLevel()
+    {
+        NextLoadLevel = (NextLoadLevel + 1) % AmmoTypes.LevelCount;
+    }
+
+    public void RequestReload()
+    {
+        if (mReloading || IsBroken) return;
+        if (Resource >= ResourceMax && LoadedLevel == NextLoadLevel) return;
+        BeginReload();
+    }
+
+    public void RefundPendingLoad()
+    {
+        if (!mReloading) return;
+        mArchitecture.SendCommand(new AddBulletsCommand(Caliber, mPendingLevel, mPendingCount));
+        mPendingCount = 0;
+        mReloadTimer = 0f;
+        mReloading = false;
+        State = WeaponState.Ready;
+    }
+
+    public override void Tick(float deltaTime)
+    {
+        base.Tick(deltaTime);
+        if (!mReloading) return;
+        if (IsBroken)
+        {
+            RefundPendingLoad();
+            return;
+        }
+        mReloadTimer -= deltaTime;
+        if (mReloadTimer > 0f) return;
+        LoadedLevel = mPendingLevel;
+        Resource += mPendingCount;
+        mPendingCount = 0;
+        mReloading = false;
+        State = WeaponState.Ready;
+    }
+
+    private void BeginReload()
+    {
+        if (IsBroken || mReloading) return;
+        if (LoadedLevel != NextLoadLevel && Resource > 0f)
+        {
+            mArchitecture.SendCommand(new AddBulletsCommand(Caliber, LoadedLevel, Mathf.RoundToInt(Resource)));
+            Resource = 0f;
+        }
+        var want = Mathf.RoundToInt(ResourceMax - Resource);
+        if (want <= 0) return;
+        var level = NextLoadLevel;
+        var take = new TakeBulletsCommand(Caliber, level, want);
+        mArchitecture.SendCommand(take);
+        if (take.Taken < want)
+        {
+            mArchitecture.SendEvent(new AmmoShortageEvent
+            {
+                SlotIndex = SlotIndex,
+                Loaded = take.Taken,
+                Wanted = want
+            });
+        }
+        if (take.Taken <= 0) return;
+        // B 只改下一次选择，不能改变已经预扣的等级。
+        mPendingLevel = level;
+        mPendingCount = take.Taken;
+        mReloadTimer = ReloadTime;
+        mReloading = true;
+        State = WeaponState.Reloading;
+    }
+
     protected override void DoAttack(Transform owner)
     {
-        // muzzle：枪口世界坐标——持有者位置 + 按朝向旋转后的偏移。
-        var muzzle = owner.position + owner.rotation * MuzzleOffset;
-
-        // 子弹对象由对象池负责创建与复用，池的注册在 WeaponSystem.Setup 中完成。
-        var bulletObject = mPool.Spawn(mBulletConfig.Id, muzzle, owner.rotation, mBulletParent);
-        var bullet = bulletObject.GetComponent<Bullet>();
-
-        // 命中伤害 = 武器伤害 + 子弹伤害；方向取持有者当前朝向（玩家已面向鼠标）。
-        bullet.Setup(mBulletConfig.Id, Mathf.RoundToInt(Damage) + mBulletConfig.Damage,
-            mBulletConfig.Speed, owner.forward);
+        var bulletConfig = BulletConfigTable.Get(AmmoTypes.BulletId(Caliber, LoadedLevel));
+        var hit = new DamageInfo(Damage * AmmoTypes.DamageMultiplier(LoadedLevel), LoadedLevel,
+            CombatFaction.Player, true);
+        var poolKey = AmmoTypes.PoolKey(Caliber);
+        // 玩家根高 1m、敌人根高 0.6m；统一弹道平面，并从脚下 XZ 开始以免越过贴身掩体。
+        var muzzle = owner.position - Vector3.up * 0.4f;
+        var bulletObject = mPool.Spawn(poolKey, muzzle, owner.rotation, mBulletParent);
+        bulletObject.GetComponent<Bullet>().Setup(poolKey, hit, bulletConfig.Speed, owner.forward);
+        Wear(AmmoTypes.WearFactor(LoadedLevel));
+        if (Resource <= 0f && !IsBroken) BeginReload();
     }
 }

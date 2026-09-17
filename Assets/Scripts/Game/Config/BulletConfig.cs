@@ -1,26 +1,29 @@
 using UnityEngine;
 
 /// <summary>
-/// 单种子弹的静态配置（ScriptableObject 资产）。
-/// 创建方式：Project 窗口右键 → Create → Game → 子弹配置，
-/// 资产与武器配置一起放在 Resources/Configs/Weapons/ 文件夹下，
-/// 运行时由 BulletConfigTable 按类型加载（与武器配置互不干扰）。
+/// 单种子弹的静态配置（ScriptableObject 资产），按（口径 × 穿甲等级 0~5）建模，共 18 种。
+/// 资产由 Editor 菜单一键生成到 Resources/Configs/Bullets/ 文件夹下，
+/// 运行时由 BulletConfigTable 按类型加载。
+/// 伤害不由子弹配置决定——命中伤害 = 武器基础伤害 × AmmoTypes 等级倍率。
 /// </summary>
 [CreateAssetMenu(fileName = "NewBullet", menuName = "Game/子弹配置", order = 1)]
 public class BulletConfig : ScriptableObject
 {
     [Header("身份")]
 
-    // mId：子弹唯一标识，兼作对象池的 key，武器配置中的 BulletId 引用它。
+    // mId：子弹唯一标识（bullet_s_0 等），约定由 AmmoTypes.BulletId 生成。
     [SerializeField] private string mId;
 
     // mName：显示名，用于实例化后在 Hierarchy 中命名子弹物体。
     [SerializeField] private string mName;
 
-    [Header("属性")]
+    [Header("弹道")]
 
-    // mDamage：子弹伤害，命中时与武器配置的伤害相加后结算。
-    [SerializeField] private int mDamage;
+    // mCaliber：子弹口径，同口径 6 个等级共享同一预制体与对象池。
+    [SerializeField] private Caliber mCaliber;
+
+    // mPenetrationLevel：穿甲等级（0~5），决定伤害倍率与磨损系数（查 AmmoTypes 表）。
+    [SerializeField] private int mPenetrationLevel;
 
     // mSpeed：飞行速度（米/秒）。
     [SerializeField] private float mSpeed;
@@ -33,7 +36,8 @@ public class BulletConfig : ScriptableObject
 
     public string Id => mId;
     public string Name => mName;
-    public int Damage => mDamage;
+    public Caliber Caliber => mCaliber;
+    public int PenetrationLevel => mPenetrationLevel;
     public float Speed => mSpeed;
     public string PrefabPath => mPrefabPath;
 }

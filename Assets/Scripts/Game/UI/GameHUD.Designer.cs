@@ -5,7 +5,7 @@ using QFramework;
 
 namespace Game.UI
 {
-	// Generate Id:5ef6e266-2258-4a62-9800-ee6c441bed0d
+	// Generate Id:fc5c6850-2944-4080-9002-ec70d43d3f47
 	public partial class GameHUD
 	{
 		public const string Name = "GameHUD";
@@ -14,6 +14,12 @@ namespace Game.UI
 		public UnityEngine.UI.Image HpFill;
 		[SerializeField]
 		public TMPro.TextMeshProUGUI HpText;
+		[SerializeField]
+		public UnityEngine.UI.Image ShieldBar;
+		[SerializeField]
+		public UnityEngine.UI.Image ShieldFill;
+		[SerializeField]
+		public TMPro.TextMeshProUGUI ShieldText;
 		[SerializeField]
 		public WeaponBarSlot Slot1;
 		[SerializeField]
@@ -32,6 +38,20 @@ namespace Game.UI
 		public WeaponBarSlot Slot8;
 		[SerializeField]
 		public WeaponBarSlot Slot9;
+		[SerializeField]
+		public TMPro.TextMeshProUGUI WaveCountdownText;
+		[SerializeField]
+		public TMPro.TextMeshProUGUI WavePreviewText;
+		[SerializeField]
+		public TMPro.TextMeshProUGUI MultiplierText;
+		[SerializeField]
+		public TMPro.TextMeshProUGUI RunGoldText;
+		[SerializeField]
+		public TMPro.TextMeshProUGUI AmmoInventoryText;
+		[SerializeField]
+		public TMPro.TextMeshProUGUI AmmoShortageText;
+		[SerializeField]
+		public UnityEngine.UI.Button SafeLootButton;
 		
 		private GameHUDData mPrivateData = null;
 		
@@ -39,6 +59,9 @@ namespace Game.UI
 		{
 			HpFill = null;
 			HpText = null;
+			ShieldBar = null;
+			ShieldFill = null;
+			ShieldText = null;
 			Slot1 = null;
 			Slot2 = null;
 			Slot3 = null;
@@ -48,6 +71,13 @@ namespace Game.UI
 			Slot7 = null;
 			Slot8 = null;
 			Slot9 = null;
+			WaveCountdownText = null;
+			WavePreviewText = null;
+			MultiplierText = null;
+			RunGoldText = null;
+			AmmoInventoryText = null;
+			AmmoShortageText = null;
+			SafeLootButton = null;
 			
 			mData = null;
 		}

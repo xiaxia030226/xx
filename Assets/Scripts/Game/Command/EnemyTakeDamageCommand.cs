@@ -1,23 +1,20 @@
 using QFramework;
 
-/// <summary>
-/// 敌人受伤命令，将武器命中与敌人生命结算解耦。
-/// </summary>
 public class EnemyTakeDamageCommand : AbstractCommand
 {
     private readonly Enemy mEnemy;
-    private readonly int mDamage;
+    private readonly DamageInfo mHit;
 
-    public EnemyTakeDamageCommand(Enemy enemy, int damage)
+    public EnemyTakeDamageCommand(Enemy enemy, DamageInfo hit)
     {
         mEnemy = enemy;
-        mDamage = damage;
+        mHit = hit;
     }
 
     protected override void OnExecute()
     {
-        // 对象可能在命令执行前已经死亡并回池，因此先验证引用和存活状态。
+        if (this.GetModel<IGameStateModel>().State.Value != GameState.Playing) return;
         if (mEnemy == null || !mEnemy.IsAlive) return;
-        mEnemy.ApplyDamage(mDamage);
+        mEnemy.ApplyDamage(mHit);
     }
 }

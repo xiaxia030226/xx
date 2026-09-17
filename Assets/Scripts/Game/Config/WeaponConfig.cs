@@ -19,15 +19,23 @@ public class WeaponConfig : ScriptableObject
 
     [Header("弹药")]
 
+    // mCaliber：该武器装填的子弹口径（S/AR/L），决定消耗哪种子弹库存与使用哪个子弹池。
+    [SerializeField] private Caliber mCaliber;
+
     // mMagazine：弹夹容量，打空后进入换弹。
     [SerializeField] private int mMagazine;
 
-    // mReloadTime：换弹时间（秒），弹夹打空后经过该时长自动补满。
+    // mReloadTime：换弹时间（秒），换弹期间该武器无法射击，切后台仍继续计时。
     [SerializeField] private float mReloadTime;
+
+    [Header("耐久")]
+
+    // mDurabilityMax：耐久上限。每发子弹磨损 1 × 子弹等级磨损系数，归零报废腾格。
+    [SerializeField] private float mDurabilityMax;
 
     [Header("伤害与射速")]
 
-    // mDamage：武器伤害，子弹命中时与子弹配置的伤害相加后结算。
+    // mDamage：武器基础伤害，命中伤害 = 基础伤害 × 子弹等级倍率（× 肉弹对无盾加成）。
     [SerializeField] private float mDamage;
 
     // mRoundsPerMinute：射速（发/分钟），仅自动武器使用；0 表示非自动武器（如手枪），
@@ -37,17 +45,13 @@ public class WeaponConfig : ScriptableObject
     // mIsAutomatic：true 表示长按连发（机枪），false 表示点击单发（手枪）。
     [SerializeField] private bool mIsAutomatic;
 
-    [Header("子弹")]
-
-    // mBulletId：该武器使用的子弹配置 id，与 BulletConfig 资产中的 Id 对应。
-    [SerializeField] private string mBulletId;
-
     public string Id => mId;
     public string Name => mName;
+    public Caliber Caliber => mCaliber;
     public int Magazine => mMagazine;
     public float ReloadTime => mReloadTime;
+    public float DurabilityMax => mDurabilityMax;
     public float Damage => mDamage;
     public float RoundsPerMinute => mRoundsPerMinute;
     public bool IsAutomatic => mIsAutomatic;
-    public string BulletId => mBulletId;
 }

@@ -6,9 +6,9 @@ using UnityEngine;
 /// </summary>
 public class PlayerHealCommand : AbstractCommand
 {
-    public int Amount { get; }
+    public float Amount { get; }
 
-    public PlayerHealCommand(int amount)
+    public PlayerHealCommand(float amount)
     {
         Amount = amount;
     }

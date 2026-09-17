@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using QFramework;
 using UnityEngine;
 
@@ -7,8 +8,20 @@ using UnityEngine;
 /// </summary>
 public class Player : MonoBehaviour, IController
 {
-    // MapLimit：地图边界为 ±50，预留 1 单位避免角色和围墙重叠。
-    private const float MapLimit = 49f;
+    private readonly HashSet<PoisonArea> mPoisonSources = new HashSet<PoisonArea>();
+    private Collider mCollider;
+
+    public void SetPoisonSource(PoisonArea source, bool inside)
+    {
+        if (inside) mPoisonSources.Add(source);
+        else mPoisonSources.Remove(source);
+    }
+
+    public void ClearPoisonSources() => mPoisonSources.Clear();
+
+    private void Awake() => mCollider = GetComponent<Collider>();
+
+    private void OnDisable() => mPoisonSources.Clear();
 
     // ScrollThreshold：滚轮切换武器的判定阈值，过滤滚动结束前的微小抖动。
     private const float ScrollThreshold = 0.1f;
@@ -23,15 +36,30 @@ public class Player : MonoBehaviour, IController
 
     private void Update()
     {
-        // 只有战斗进行中才响应输入；主菜单/暂停/结算状态下全部跳过。
-        // 暂停时 timeScale=0 虽能拦住移动，但转向和攻击不依赖 deltaTime，必须用状态闸门统一拦截。
-        if (this.GetModel<IGameStateModel>().State.Value != GameState.Playing) return;
-
-        // 每帧按固定顺序处理：移动 → 转向 → 攻击 → 切换武器。
+        var state = this.GetModel<IGameStateModel>().State.Value;
+        if (state != GameState.Playing && state != GameState.SafeLoot) return;
         HandleMove();
         FaceMouse();
+        if (state != GameState.Playing) return;
         HandleAttack();
+        HandleWeaponOps();
         HandleWeaponSwitch();
+    }
+
+    /// <summary>
+    /// 处理换弹与子弹等级切换：R 主动换弹，B 循环切换下次装填的穿甲等级（各枪独立记忆）。
+    /// </summary>
+    private void HandleWeaponOps()
+    {
+        if (GameInput.Reload.WasPressedThisFrame())
+        {
+            GetWeaponSystem().RequestReloadCurrent();
+        }
+
+        if (GameInput.CycleBulletLevel.WasPressedThisFrame())
+        {
+            GetWeaponSystem().CycleNextLoadLevelCurrent();
+        }
     }
 
     /// <summary>
@@ -51,14 +79,10 @@ public class Player : MonoBehaviour, IController
         // speed：从 Model 读取移动速度，玩家属性统一由 Model 管理。
         var speed = this.GetModel<IPlayerModel>().MoveSpeed.Value;
 
-        // position：计算新位置——把 2D 输入映射到 XZ 平面，乘以速度与帧间隔得到位移。
-        var position = transform.position;
-        position += new Vector3(moveInput.x, 0f, moveInput.y) * (speed * Time.deltaTime);
-
-        // 把新位置限制在地图边界内，防止玩家走出围墙。
-        position.x = Mathf.Clamp(position.x, -MapLimit, MapLimit);
-        position.z = Mathf.Clamp(position.z, -MapLimit, MapLimit);
-        transform.position = position;
+        if (mPoisonSources.Count > 0) speed *= 0.8f;
+        var displacement = new Vector3(moveInput.x, 0f, moveInput.y) * (speed * Time.deltaTime);
+        var radius = Mathf.Max(mCollider.bounds.extents.x, mCollider.bounds.extents.z);
+        transform.position = GameRoot.Environment.Navigation.Move(transform.position, displacement, radius, mCollider);
     }
 
     /// <summary>

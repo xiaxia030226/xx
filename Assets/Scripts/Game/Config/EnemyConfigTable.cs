@@ -8,8 +8,18 @@ using UnityEngine;
 /// </summary>
 public static class EnemyConfigTable
 {
-    // SlimeGreenId：绿史莱姆的 id 约定常量，波次表（代码配置）引用它指定生成哪种敌人。
     public const string SlimeGreenId = "slime_green";
+    public const string SlimeRedId = "slime_red";
+    public const string GoblinId = "goblin";
+    public const string ArcherId = "archer";
+    public const string WolfId = "wolf";
+    public const string SpiderId = "spider";
+    public const string TreantId = "treant";
+    public const string MageId = "mage";
+    public const string RamId = "ram";
+    public const string DrummerId = "drummer";
+    public const string SplitterId = "splitter";
+    public const string SlimeKingId = "slime_king";
 
     // ConfigsFolder：敌人配置资产在 Resources 下的相对文件夹路径。
     private const string ConfigsFolder = "Configs/Enemies";

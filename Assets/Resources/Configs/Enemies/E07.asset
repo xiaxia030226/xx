@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff063028a6e834f469967b28f576442b, type: 3}
+  m_Name: E07
+  m_EditorClassIdentifier: 
+  mId: treant
+  mName: "\u6811\u7CBE"
+  mMaxHP: 140
+  mMoveSpeed: 1.5
+  mContactDamage: 18
+  mAttackInterval: 2.5
+  mAttackRange: 3
+  mAIType: 6
+  mCategory: 0
+  mAttackLevel: 2
+  mWindup: 1
+  mRecovery: 0.35
+  mProjectileSpeed: 12
+  mChargeDistance: 0
+  mChargeSpeed: 0
+  mAreaRadius: 3
+  mTeleportDistance: 0
+  mGoldMin: 1
+  mGoldMax: 1
+  mAmmoChance: 0.55
+  mAmmoLevelMin: 0
+  mAmmoLevelMax: 1
+  mAmmoCountMin: 10
+  mAmmoCountMax: 20
+  mShieldChance: 0.03
+  mWeaponChance: 0.01
+  mShieldLevelMin: 1
+  mShieldLevelMax: 1
+  mPrefabPath: Prefabs/StageThree/E07

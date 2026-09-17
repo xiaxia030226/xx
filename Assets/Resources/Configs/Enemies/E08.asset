@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff063028a6e834f469967b28f576442b, type: 3}
+  m_Name: E08
+  m_EditorClassIdentifier: 
+  mId: mage
+  mName: "\u6697\u5F71\u6CD5\u5E08"
+  mMaxHP: 65
+  mMoveSpeed: 2.6
+  mContactDamage: 14
+  mAttackInterval: 3
+  mAttackRange: 8
+  mAIType: 7
+  mCategory: 0
+  mAttackLevel: 2
+  mWindup: 0.6
+  mRecovery: 0.35
+  mProjectileSpeed: 12
+  mChargeDistance: 0
+  mChargeSpeed: 0
+  mAreaRadius: 0
+  mTeleportDistance: 6
+  mGoldMin: 1
+  mGoldMax: 1
+  mAmmoChance: 0.55
+  mAmmoLevelMin: 0
+  mAmmoLevelMax: 1
+  mAmmoCountMin: 10
+  mAmmoCountMax: 20
+  mShieldChance: 0.03
+  mWeaponChance: 0.01
+  mShieldLevelMin: 1
+  mShieldLevelMax: 1
+  mPrefabPath: Prefabs/StageThree/E08

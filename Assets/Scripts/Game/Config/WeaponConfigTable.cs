@@ -14,7 +14,7 @@ public static class WeaponConfigTable
     // MachineGunId：机枪的 id 约定常量，WeaponSystem 用它装配第二格武器。
     public const string MachineGunId = "machinegun";
 
-    // ConfigsFolder：武器配置资产在 Resources 下的相对文件夹路径（与子弹配置同目录）。
+    // ConfigsFolder：武器配置资产在 Resources 下的相对文件夹路径（子弹配置在 Configs/Bullets）。
     private const string ConfigsFolder = "Configs/Weapons";
 
     // sConfigs：懒加载的配置字典（武器 id → 配置资产），首次访问时从 Resources 加载填充。
@@ -49,7 +49,6 @@ public static class WeaponConfigTable
 
     /// <summary>
     /// 从 Resources/Configs/Weapons 加载全部武器配置资产并填入字典。
-    /// LoadAll 按类型过滤，同文件夹下的子弹配置资产不会被误读进来。
     /// </summary>
     private static Dictionary<string, WeaponConfig> LoadAll()
     {

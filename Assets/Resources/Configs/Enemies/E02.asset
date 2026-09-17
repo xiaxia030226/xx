@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff063028a6e834f469967b28f576442b, type: 3}
+  m_Name: E02
+  m_EditorClassIdentifier: 
+  mId: slime_red
+  mName: "\u7EA2\u53F2\u83B1\u59C6"
+  mMaxHP: 40
+  mMoveSpeed: 2.5
+  mContactDamage: 12
+  mAttackInterval: 4
+  mAttackRange: 1
+  mAIType: 1
+  mCategory: 0
+  mAttackLevel: 1
+  mWindup: 0.7
+  mRecovery: 0.35
+  mProjectileSpeed: 12
+  mChargeDistance: 4
+  mChargeSpeed: 8
+  mAreaRadius: 0
+  mTeleportDistance: 0
+  mGoldMin: 1
+  mGoldMax: 1
+  mAmmoChance: 0.55
+  mAmmoLevelMin: 0
+  mAmmoLevelMax: 1
+  mAmmoCountMin: 10
+  mAmmoCountMax: 20
+  mShieldChance: 0.03
+  mWeaponChance: 0.01
+  mShieldLevelMin: 1
+  mShieldLevelMax: 1
+  mPrefabPath: Prefabs/StageThree/E02

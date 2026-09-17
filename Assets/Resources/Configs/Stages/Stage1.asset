@@ -1,0 +1,97 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e12c4d0571bc1b418196ecec20d5155, type: 3}
+  m_Name: Stage1
+  m_EditorClassIdentifier: 
+  mLevel: 1
+  mEnvironmentPath: Prefabs/StageThree/Stage1Environment
+  mWaves:
+  - mWave: 1
+    mIntervalFromPrev: 0
+    mGroups:
+    - mEnemyId: slime_green
+      mCount: 18
+      mInterval: 0.35
+      mShieldLevel: 0
+    mIsBoss: 0
+  - mWave: 2
+    mIntervalFromPrev: 45
+    mGroups:
+    - mEnemyId: slime_green
+      mCount: 16
+      mInterval: 0.35
+      mShieldLevel: 0
+    - mEnemyId: slime_red
+      mCount: 4
+      mInterval: 0.35
+      mShieldLevel: 0
+    - mEnemyId: ram
+      mCount: 1
+      mInterval: 0.35
+      mShieldLevel: 1
+    mIsBoss: 0
+  - mWave: 3
+    mIntervalFromPrev: 45
+    mGroups:
+    - mEnemyId: goblin
+      mCount: 14
+      mInterval: 0.35
+      mShieldLevel: 0
+    - mEnemyId: drummer
+      mCount: 2
+      mInterval: 0.35
+      mShieldLevel: 1
+    mIsBoss: 0
+  - mWave: 4
+    mIntervalFromPrev: 50
+    mGroups:
+    - mEnemyId: splitter
+      mCount: 8
+      mInterval: 0.35
+      mShieldLevel: 0
+    - mEnemyId: slime_green
+      mCount: 18
+      mInterval: 0.35
+      mShieldLevel: 1
+    mIsBoss: 0
+  - mWave: 5
+    mIntervalFromPrev: 50
+    mGroups:
+    - mEnemyId: archer
+      mCount: 8
+      mInterval: 0.35
+      mShieldLevel: 0
+    - mEnemyId: ram
+      mCount: 2
+      mInterval: 0.35
+      mShieldLevel: 1
+    - mEnemyId: drummer
+      mCount: 2
+      mInterval: 0.35
+      mShieldLevel: 1
+    - mEnemyId: slime_green
+      mCount: 20
+      mInterval: 0.35
+      mShieldLevel: 0
+    mIsBoss: 0
+  - mWave: 6
+    mIntervalFromPrev: 60
+    mGroups:
+    - mEnemyId: slime_king
+      mCount: 1
+      mInterval: 0.35
+      mShieldLevel: 2
+    mIsBoss: 1
+  mWeaponIds:
+  - pistol
+  - machinegun
+  mClearBonus: 500
