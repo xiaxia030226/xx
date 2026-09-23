@@ -38,9 +38,8 @@ public class WeaponConfig : ScriptableObject
     // mDamage：武器基础伤害，命中伤害 = 基础伤害 × 子弹等级倍率（× 肉弹对无盾加成）。
     [SerializeField] private float mDamage;
 
-    // mRoundsPerMinute：射速（发/分钟），仅自动武器使用；0 表示非自动武器（如手枪），
-    // 非自动武器的攻击间隔由 GunWeapon 中的固定值决定。
-    [SerializeField] private float mRoundsPerMinute;
+    [SerializeField, Min(0f)] private float mRoundsPerMinute;
+    [SerializeField, Min(0.01f)] private float mSemiAutoInterval = 0.25f;
 
     // mIsAutomatic：true 表示长按连发（机枪），false 表示点击单发（手枪）。
     [SerializeField] private bool mIsAutomatic;
@@ -53,5 +52,6 @@ public class WeaponConfig : ScriptableObject
     public float DurabilityMax => mDurabilityMax;
     public float Damage => mDamage;
     public float RoundsPerMinute => mRoundsPerMinute;
+    public float SemiAutoInterval => mSemiAutoInterval;
     public bool IsAutomatic => mIsAutomatic;
 }

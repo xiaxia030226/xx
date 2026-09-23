@@ -11,8 +11,8 @@ public static class WeaponConfigTable
     // PistolId：手枪的 id 约定常量，WeaponSystem 用它装配第一格武器。
     public const string PistolId = "pistol";
 
-    // MachineGunId：机枪的 id 约定常量，WeaponSystem 用它装配第二格武器。
     public const string MachineGunId = "machinegun";
+    public const string SmgId = "smg";
 
     // ConfigsFolder：武器配置资产在 Resources 下的相对文件夹路径（子弹配置在 Configs/Bullets）。
     private const string ConfigsFolder = "Configs/Weapons";

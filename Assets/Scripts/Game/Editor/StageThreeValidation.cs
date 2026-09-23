@@ -85,12 +85,13 @@ public static class StageThreeValidation
     private static void ValidateWeapons(Report report)
     {
         var configs = ReadCatalog<WeaponConfig>(report, "Configs/Weapons", c => c.Id);
-        ValidateWeapon(report, configs, "pistol", Caliber.S, 100f, 12, 10f, 1.5f, false);
-        ValidateWeapon(report, configs, "machinegun", Caliber.AR, 240f, 50, 6f, 2.5f, true);
+        ValidateWeapon(report, configs, "pistol", Caliber.S, 100f, 12, 10f, 1.5f, false, 0f, 0.25f);
+        ValidateWeapon(report, configs, "machinegun", Caliber.AR, 240f, 50, 6f, 2.5f, true, 600f, 0.25f);
+        ValidateWeapon(report, configs, "smg", Caliber.S, 160f, 30, 8f, 1.8f, true, 720f, 0.25f);
     }
 
     private static void ValidateWeapon(Report report, WeaponConfig[] configs, string id, Caliber caliber,
-        float durability, int magazine, float damage, float reload, bool automatic)
+        float durability, int magazine, float damage, float reload, bool automatic, float rpm, float semiAutoInterval)
     {
         report.Check($"枪械 {id}：{caliber} / 耐久{durability} / 容量{magazine} / 伤害{damage}", () =>
         {
@@ -101,7 +102,8 @@ public static class StageThreeValidation
             Near(config.Damage, damage, "mDamage");
             Near(config.ReloadTime, reload, "mReloadTime");
             Require(config.IsAutomatic == automatic, "mIsAutomatic 不匹配。");
-            if (automatic) Near(config.RoundsPerMinute, 600f, "mRoundsPerMinute");
+            if (automatic) Near(config.RoundsPerMinute, rpm, "mRoundsPerMinute");
+            else Near(config.SemiAutoInterval, semiAutoInterval, "mSemiAutoInterval");
         });
         InspectSerializedFields(report, id + " 磁盘迁移", () => Unique(configs, c => c.Id == id, id),
             new[] { "mCaliber", "mDurabilityMax" }, new[] { "mBulletId" });
@@ -275,12 +277,12 @@ public static class StageThreeValidation
             Near(children * 10f + summons * 30f, 600f, "派生体额外 HP 预算");
         });
         report.Note("150 是资源人数结合设计上限得到的预算；未执行阈值、延迟出生或清场调度，不能据此认定运行时最多出生 150。");
-        report.Check("Stage1：枪池仅 pistol/machinegun，结算奖励 500", () =>
+        report.Check("Stage1：枪池恰好 pistol/machinegun/smg，结算奖励 500", () =>
         {
             var config = stage();
-            Require(config.WeaponIds != null && config.WeaponIds.Count == 2
-                && config.WeaponIds.OrderBy(id => id, StringComparer.Ordinal).SequenceEqual(new[] { "machinegun", "pistol" }),
-                "本阶段枪池必须恰好为 pistol 与 machinegun。");
+            Require(config.WeaponIds != null && config.WeaponIds.Count == 3
+                && config.WeaponIds.OrderBy(id => id, StringComparer.Ordinal).SequenceEqual(new[] { "machinegun", "pistol", "smg" }),
+                "本阶段枪池必须恰好为 pistol、machinegun 与 smg。");
             Require(config.ClearBonus == 500, "mClearBonus 应为 500。");
         });
         report.Check("Stage1：从 EnvironmentPath 读取场地 prefab（非导航验收）", () =>
@@ -569,8 +571,20 @@ public static class StageThreeValidation
         protected override void Init()
         {
             RegisterModel<IBulletInventoryModel>(new BulletInventoryModel());
-            RegisterSystem<IGameObjectPoolSystem>(new GameObjectPoolSystem());
+            RegisterSystem<IGameObjectPoolSystem>(new ReloadTestPool());
         }
+    }
+
+    private sealed class ReloadTestPool : AbstractSystem, IGameObjectPoolSystem
+    {
+        protected override void OnInit() { }
+        public void Register(string key, Func<GameObject> factory, int initialCount = 0) =>
+            throw new InvalidOperationException("阶段三换弹断言不应注册池工厂。");
+        public GameObject Spawn(string key, Vector3 position, Quaternion rotation, Transform parent = null) =>
+            throw new InvalidOperationException("阶段三换弹断言不应生成对象。");
+        public void Recycle(string key, GameObject instance) { }
+        public int GetCachedCount(string key) => 0;
+        public void ClearAll() { }
     }
 
     private sealed class GunFixture : IDisposable
@@ -609,7 +623,7 @@ public static class StageThreeValidation
                     mArchitecture.SendCommand(new TakeBulletsCommand(caliber, level, Inventory.GetCount(caliber, level)));
                 mInventorySubscription = mArchitecture.RegisterEvent<BulletInventoryChangedEvent>(e => Changes.Add(e));
                 mShortageSubscription = mArchitecture.RegisterEvent<AmmoShortageEvent>(e => Shortages.Add(e));
-                Gun = new GunWeapon(mConfig, mArchitecture, null) { SlotIndex = 4 };
+                Gun = new GunWeapon(mConfig, mArchitecture, null, ItemOrigin.Loot) { SlotIndex = 4 };
                 State(0f, false);
                 Require(Gun.LoadedLevel == 0 && Gun.NextLoadLevel == 0, "初始装填等级不为 0。");
             }
@@ -620,13 +634,18 @@ public static class StageThreeValidation
             }
         }
 
-        public void Seed(int level, int count) => mArchitecture.SendCommand(new AddBulletsCommand(Caliber.S, level, count));
+        public void Seed(int level, int count) => mArchitecture.SendCommand(new AddBulletsCommand(Caliber.S, level, AmmoBatch.Loot(count)));
         public void Count(int level, int expected) =>
             Require(Inventory.GetCount(Caliber.S, level) == expected, $"S·{level} 库存实际 {Inventory.GetCount(Caliber.S, level)}，预期 {expected}。");
         public void ClearEvents() { Changes.Clear(); Shortages.Clear(); }
         public void State(float resource, bool reloading)
         {
             Near(Gun.Resource, resource, "弹夹余弹");
+            var ammo = Gun.LoadedAmmo;
+            Near(ammo.Count, resource, "LoadedAmmo.Count 与 Resource 一致");
+            Require(ammo.SupplyCount >= 0 && ammo.LootCount >= 0 && ammo.SupplyCount + ammo.LootCount == ammo.Count,
+                "弹夹来源份额非法。");
+            Require(ammo.SupplyCount == 0, "阶段三测试初态应全部为 Loot。");
             Require(Gun.IsReloading == reloading, "IsReloading 不匹配。");
             Require(Gun.State == (reloading ? WeaponState.Reloading : WeaponState.Ready), "WeaponState 不匹配。");
         }
@@ -637,6 +656,9 @@ public static class StageThreeValidation
             var setter = property?.GetSetMethod(true);
             Require(setter != null, "WeaponBase.Resource 非公开 setter 不可用。");
             setter.Invoke(Gun, new object[] { value });
+            var supply = typeof(GunWeapon).GetField("mLoadedSupplyCount", BindingFlags.NonPublic | BindingFlags.Instance);
+            Require(supply != null, "GunWeapon.mLoadedSupplyCount 不存在。");
+            supply.SetValue(Gun, 0);
         }
         public void PrepareLevelOneWithFourRounds()
         {

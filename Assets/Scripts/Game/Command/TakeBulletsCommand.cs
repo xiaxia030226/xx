@@ -2,7 +2,7 @@ using QFramework;
 
 /// <summary>
 /// 子弹出库命令：换弹开始时按选定口径与等级预扣子弹。
-/// Command 同步执行，发送后立即读取 Taken 获得实际取出的数量（库存不足时少于 Want）。
+/// Command 同步执行，发送后立即读取 Taken 获得实际取出的批次。
 /// </summary>
 public class TakeBulletsCommand : AbstractCommand
 {
@@ -11,8 +11,7 @@ public class TakeBulletsCommand : AbstractCommand
     public int Level { get; }
     public int Want { get; }
 
-    // Taken：实际取出的数量，执行后由 Model 写回；调用方发送命令后读取。
-    public int Taken { get; private set; }
+    public AmmoBatch Taken { get; private set; }
 
     public TakeBulletsCommand(Caliber caliber, int level, int want)
     {

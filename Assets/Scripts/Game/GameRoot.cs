@@ -44,6 +44,9 @@ public partial class GameRoot : MonoBehaviour, IController
             CreateMainCamera(PlayerInstance.transform);
             SetupSystems();
             RegisterBattleEvents();
+            if (Environment.EmergencySupplyCrate == null)
+                throw new System.InvalidOperationException("阶段四装配异常：StageEnvironment 未配置 EmergencySupplyCrate，请通过 Game/阶段四/校验资源 检查并手工装配应急箱。");
+            Environment.EmergencySupplyCrate.Initialize(mStage, PlayerInstance.transform, GetArchitecture(), mPickupRoot);
             state.State.Value = GameState.Playing;
             UIKit.OpenPanel<GameHUD>();
             mEnemySpawnSystem.StartWave(1);
@@ -52,7 +55,7 @@ public partial class GameRoot : MonoBehaviour, IController
         {
             state.State.Value = GameState.Boot;
             enabled = false;
-            Debug.LogError($"[GameRoot] 战斗装配失败，请先执行 Game/阶段三/校验资源：{error}");
+            Debug.LogError($"[GameRoot] 战斗装配失败，请先执行 Game/阶段四/校验资源：{error}");
         }
     }
 
@@ -116,8 +119,17 @@ public partial class GameRoot : MonoBehaviour, IController
     private void RegisterBattleEvents()
     {
         this.RegisterEvent<EnemyDiedEvent>(OnEnemyDied).UnRegisterWhenGameObjectDestroyed(gameObject);
+        this.RegisterEvent<WeaponAmmoDroppedEvent>(OnWeaponAmmoDropped).UnRegisterWhenGameObjectDestroyed(gameObject);
         this.RegisterEvent<AllWavesClearedEvent>(_ => EnterSafeLoot()).UnRegisterWhenGameObjectDestroyed(gameObject);
         this.RegisterEvent<PlayerDiedEvent>(_ => EnterResult(false)).UnRegisterWhenGameObjectDestroyed(gameObject);
+    }
+
+    private void OnWeaponAmmoDropped(WeaponAmmoDroppedEvent e)
+    {
+        if (e.Ammo.Count <= 0) return;
+        var position = new Vector3(e.Position.x, 0.4f, e.Position.z);
+        var pickup = this.GetSystem<IGameObjectPoolSystem>().Spawn(AmmoPackPickup.PoolKey, position, Quaternion.identity, mPickupRoot);
+        pickup.GetComponent<AmmoPackPickup>().OnSpawn(e.Caliber, e.Level, e.Ammo, PlayerInstance.transform);
     }
 
     private void OnEnemyDied(EnemyDiedEvent e)
@@ -132,7 +144,7 @@ public partial class GameRoot : MonoBehaviour, IController
         if (e.DropAmmo && e.AmmoCount > 0)
         {
             var pickup = pool.Spawn(AmmoPackPickup.PoolKey, position + Vector3.right * 0.5f, Quaternion.identity, mPickupRoot);
-            pickup.GetComponent<AmmoPackPickup>().OnSpawn(e.AmmoCaliber, e.AmmoLevel, e.AmmoCount, PlayerInstance.transform);
+            pickup.GetComponent<AmmoPackPickup>().OnSpawn(e.AmmoCaliber, e.AmmoLevel, AmmoBatch.Loot(e.AmmoCount), PlayerInstance.transform);
         }
         if (e.ShieldLevel > 0)
         {
@@ -142,7 +154,7 @@ public partial class GameRoot : MonoBehaviour, IController
         if (!string.IsNullOrEmpty(e.WeaponId))
         {
             var pickup = pool.Spawn(WeaponPickup.PoolKey, position + Vector3.forward * 0.5f, Quaternion.identity, mPickupRoot);
-            pickup.GetComponent<WeaponPickup>().OnSpawn(e.WeaponId, PlayerInstance.transform);
+            pickup.GetComponent<WeaponPickup>().OnSpawn(e.WeaponId, ItemOrigin.Loot, PlayerInstance.transform);
         }
     }
 
@@ -240,8 +252,8 @@ public partial class GameRoot : MonoBehaviour, IController
         if (GameInput.DebugHeal.WasPressedThisFrame()) this.SendCommand(new PlayerHealCommand(10f));
         if (GameInput.DebugAmmo.WasPressedThisFrame())
         {
-            this.SendCommand(new AddBulletsCommand(Caliber.S, 0, 60));
-            this.SendCommand(new AddBulletsCommand(Caliber.AR, 0, 60));
+            this.SendCommand(new AddBulletsCommand(Caliber.S, 0, AmmoBatch.Supply(60)));
+            this.SendCommand(new AddBulletsCommand(Caliber.AR, 0, AmmoBatch.Supply(60)));
         }
 #endif
     }

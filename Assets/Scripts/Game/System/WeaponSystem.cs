@@ -26,7 +26,7 @@ public interface IWeaponSystem : ISystem
 
     /// <summary>B：循环切换当前武器下次装填的穿甲等级，各枪独立记忆。</summary>
     void CycleNextLoadLevelCurrent();
-    bool TryPickupWeapon(string weaponId);
+    bool TryPickupWeapon(string weaponId, ItemOrigin origin);
     void CancelReloads();
 }
 
@@ -60,7 +60,7 @@ public class WeaponSystem : AbstractSystem, IWeaponSystem
         CurrentIndex >= 0 && CurrentIndex < mWeapons.Count ? mWeapons[CurrentIndex] : null;
 
     /// <summary>
-    /// 绑定武器持有者并建立初始武器栏：第一格手枪（S 口径）、第二格机枪（AR 口径）。
+    /// 绑定武器持有者并建立初始武器栏：第一格补给手枪（S 口径）。
     /// 子弹对象池按口径注册（同口径 6 级共享预制体），用到哪个口径才注册哪个（懒注册）。
     /// 注意：这里不广播切枪事件——本方法执行时 HUD 尚未打开，
     /// 事件会因无人订阅而丢失；HUD 在 OnInit 中主动拉取当前状态完成初始显示。
@@ -72,15 +72,10 @@ public class WeaponSystem : AbstractSystem, IWeaponSystem
         mOwner = owner;
         mBulletParent = bulletParent;
 
-        // 跨场景重入时直接丢弃上局武器：换弹预扣子弹随 BulletInventoryModel.Reset 一并清零，
-        // 无需逐枪退回（退回了也会被 Reset 覆盖）。
+        // 库存已由 GameRoot 重置，旧枪的 pending 不能退入新一局库存。
         mWeapons.Clear();
         mRegisteredPools.Clear();
-
-        // 装配开局武器（机枪为阶段二临时测试配置，用于验证手动切枪与各枪独立装填；
-        // 阶段四整枪掉落上线后移除开局机枪）。
         AddGun(WeaponConfigTable.PistolId, bulletParent);
-        AddGun(WeaponConfigTable.MachineGunId, bulletParent);
 
         CurrentIndex = 0;
 
@@ -93,7 +88,7 @@ public class WeaponSystem : AbstractSystem, IWeaponSystem
             mLastSentDurabilities[i] = -1f;
         }
 
-        // 首次装填：从库存预扣（初始 S·0×60 已含手枪首装份额；机枪 AR 弹靠掉落或调试键补充）。
+        // 初始 S·0×60 已包含手枪首装份额。
         foreach (var weapon in mWeapons)
         {
             (weapon as GunWeapon)?.RequestReload();
@@ -110,15 +105,13 @@ public class WeaponSystem : AbstractSystem, IWeaponSystem
         {
             var weapon = mWeapons[i];
             if (weapon == null) continue;
-
-            weapon.Tick(deltaTime);
-
-            // 耐久归零报废：退回换弹预扣子弹、槽位置空、广播事件；不自动切枪。
             if (weapon.IsBroken)
             {
                 BreakWeapon(i);
                 continue;
             }
+
+            weapon.Tick(deltaTime);
 
             // 弹量变化超阈值才广播，避免静止时 HUD 重复刷新相同显示。
             if (Mathf.Abs(weapon.Resource - mLastSentResources[i]) > ResourceChangeThreshold)
@@ -201,15 +194,15 @@ public class WeaponSystem : AbstractSystem, IWeaponSystem
         (CurrentWeapon as GunWeapon)?.CycleNextLoadLevel();
     }
 
-    public bool TryPickupWeapon(string weaponId)
+    public bool TryPickupWeapon(string weaponId, ItemOrigin origin)
     {
         var state = this.GetModel<IGameStateModel>().State.Value;
         if (state != GameState.Playing && state != GameState.SafeLoot) return false;
-        if (weaponId != WeaponConfigTable.PistolId && weaponId != WeaponConfigTable.MachineGunId) return false;
+        if (string.IsNullOrWhiteSpace(weaponId) || !WeaponConfigTable.TryGet(weaponId, out var config)) return false;
         var index = mWeapons.FindIndex(weapon => weapon == null);
         if (index < 0 && mWeapons.Count >= 9) return false;
-        var config = WeaponConfigTable.Get(weaponId);
-        if (config.DurabilityMax <= 0f || config.Magazine <= 0) return false;
+        if (config.DurabilityMax <= 0f || config.Magazine <= 0 || config.ReloadTime <= 0f
+            || (config.IsAutomatic ? config.RoundsPerMinute <= 0f : config.SemiAutoInterval <= 0f)) return false;
         EnsureBulletPool(config.Caliber, mBulletParent);
         if (index < 0)
         {
@@ -218,7 +211,10 @@ public class WeaponSystem : AbstractSystem, IWeaponSystem
             System.Array.Resize(ref mLastSentResources, mWeapons.Count);
             System.Array.Resize(ref mLastSentDurabilities, mWeapons.Count);
         }
-        mWeapons[index] = new GunWeapon(config, GameArchitecture.Interface, mBulletParent) { SlotIndex = index };
+        mWeapons[index] = new GunWeapon(config, ((IBelongToArchitecture)this).GetArchitecture(), mBulletParent, origin)
+        {
+            SlotIndex = index
+        };
         mLastSentResources[index] = -1f;
         mLastSentDurabilities[index] = -1f;
         this.SendEvent(new WeaponAddedEvent { SlotIndex = index });
@@ -240,12 +236,12 @@ public class WeaponSystem : AbstractSystem, IWeaponSystem
     private void AddGun(string weaponId, Transform bulletParent)
     {
         var config = WeaponConfigTable.Get(weaponId);
-        if (config.DurabilityMax <= 0f || config.Magazine <= 0)
-            throw new System.InvalidOperationException($"武器配置未迁移：{weaponId}，请执行阶段三资源校验。");
+        if (config.DurabilityMax <= 0f || config.Magazine <= 0 || config.ReloadTime <= 0f
+            || (config.IsAutomatic ? config.RoundsPerMinute <= 0f : config.SemiAutoInterval <= 0f))
+            throw new System.InvalidOperationException($"武器配置无效：{weaponId}，请执行阶段三/阶段四资源校验。");
         EnsureBulletPool(config.Caliber, bulletParent);
 
-        // AbstractSystem 的 GetArchitecture 是显式接口实现无法直接调用，这里与实体脚本一致用架构单例。
-        var gun = new GunWeapon(config, GameArchitecture.Interface, bulletParent)
+        var gun = new GunWeapon(config, ((IBelongToArchitecture)this).GetArchitecture(), bulletParent, ItemOrigin.Supply)
         {
             SlotIndex = mWeapons.Count
         };
@@ -275,20 +271,28 @@ public class WeaponSystem : AbstractSystem, IWeaponSystem
         mRegisteredPools.Add(poolKey);
     }
 
-    /// <summary>
-    /// 武器报废处理：退回换弹预扣子弹、槽位置空、广播报废事件。不自动切枪。
-    /// </summary>
     private void BreakWeapon(int slotIndex)
     {
         var weapon = mWeapons[slotIndex];
-
-        (weapon as GunWeapon)?.RefundPendingLoad();
+        if (weapon == null) return;
+        var gun = weapon as GunWeapon;
+        var ammo = gun?.UnloadMagazine() ?? default;
         mWeapons[slotIndex] = null;
-
-        // 重置广播缓存，将来该槽位装新枪时首帧必发事件。
         mLastSentResources[slotIndex] = -1f;
         mLastSentDurabilities[slotIndex] = -1f;
 
+        // 先清空所有权，再发可能同步触发其他逻辑的库存与掉落事件。
+        gun?.RefundPendingLoad();
+        if (ammo.Count > 0)
+        {
+            this.SendEvent(new WeaponAmmoDroppedEvent
+            {
+                Position = mOwner.position,
+                Caliber = gun.Caliber,
+                Level = gun.LoadedLevel,
+                Ammo = ammo
+            });
+        }
         this.SendEvent(new WeaponBrokenEvent { SlotIndex = slotIndex });
         Debug.Log($"[Weapon] 槽位 {slotIndex + 1} 的 {weapon.Name} 耐久归零报废");
     }

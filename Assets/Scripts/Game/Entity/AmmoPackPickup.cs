@@ -20,10 +20,9 @@ public class AmmoPackPickup : MonoBehaviour, IController
     // FlySpeed：磁吸飞行速度（米/秒）。
     private const float FlySpeed = 9f;
 
-    // mCaliber / mLevel / mCount：子弹包含弹的口径、穿甲等级与数量（掉落掷点结果）。
     private Caliber mCaliber;
     private int mLevel;
-    private int mCount;
+    private AmmoBatch mAmmo;
 
     // mTarget：吸附目标（玩家）。
     private Transform mTarget;
@@ -33,11 +32,11 @@ public class AmmoPackPickup : MonoBehaviour, IController
     /// <summary>
     /// 每次从对象池取出时调用，重置含弹信息与吸附目标。
     /// </summary>
-    public void OnSpawn(Caliber caliber, int level, int count, Transform target)
+    public void OnSpawn(Caliber caliber, int level, AmmoBatch ammo, Transform target)
     {
         mCaliber = caliber;
         mLevel = level;
-        mCount = count;
+        mAmmo = ammo;
         mTarget = target;
     }
 
@@ -58,7 +57,10 @@ public class AmmoPackPickup : MonoBehaviour, IController
         // 拾取半径内：子弹入库并回池。
         if (offset.sqrMagnitude <= CollectRadius * CollectRadius)
         {
-            this.SendCommand(new AddBulletsCommand(mCaliber, mLevel, mCount));
+            var ammo = mAmmo;
+            mAmmo = default;
+            mTarget = null;
+            this.SendCommand(new AddBulletsCommand(mCaliber, mLevel, ammo));
             this.GetSystem<IGameObjectPoolSystem>().Recycle(PoolKey, gameObject);
         }
     }

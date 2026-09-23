@@ -1,24 +1,20 @@
 using QFramework;
 
-/// <summary>
-/// 子弹入库命令：拾取子弹包等场景向库存补充子弹。
-/// </summary>
 public class AddBulletsCommand : AbstractCommand
 {
-    // Caliber/Level/Count：要入库的子弹口径、穿甲等级与数量。
     public Caliber Caliber { get; }
     public int Level { get; }
-    public int Count { get; }
+    public AmmoBatch Ammo { get; }
 
-    public AddBulletsCommand(Caliber caliber, int level, int count)
+    public AddBulletsCommand(Caliber caliber, int level, AmmoBatch ammo)
     {
         Caliber = caliber;
         Level = level;
-        Count = count;
+        Ammo = ammo;
     }
 
     protected override void OnExecute()
     {
-        this.GetModel<IBulletInventoryModel>().Add(Caliber, Level, Count);
+        this.GetModel<IBulletInventoryModel>().Add(Caliber, Level, Ammo);
     }
 }

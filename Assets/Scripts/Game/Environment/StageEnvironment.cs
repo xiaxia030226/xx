@@ -10,11 +10,13 @@ public class StageEnvironment : MonoBehaviour
 {
     [SerializeField] private float mHalfSize = 45f;
     [SerializeField] private Transform[] mEntrances = Array.Empty<Transform>();
+    [SerializeField] private EmergencySupplyCrate mEmergencySupplyCrate;
 
     private BattleNavigation mNavigation;
 
     public float HalfSize => mHalfSize;
     public IReadOnlyList<Transform> Entrances => mEntrances ?? Array.Empty<Transform>();
+    public EmergencySupplyCrate EmergencySupplyCrate => mEmergencySupplyCrate;
     public BattleNavigation Navigation
     {
         get

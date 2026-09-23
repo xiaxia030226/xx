@@ -85,8 +85,8 @@
     <Compile Include="Assets\Scripts\Game\Combat\EnemyDropData.cs" />
     <Compile Include="Assets\Scripts\Game\GameRoot.Environment.cs" />
     <Compile Include="Assets\Scripts\Game\Model\EnemyModel.cs" />
-    <Compile Include="Assets\Scripts\Game\Combat\DamageResolver.cs" />
     <Compile Include="Assets\Scripts\Game\Command\AddBulletsCommand.cs" />
+    <Compile Include="Assets\Scripts\Game\Combat\DamageResolver.cs" />
     <Compile Include="Assets\Scripts\Game\Config\WeaponConfigTable.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextSelector_A.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark01_UGUI.cs" />
@@ -97,9 +97,9 @@
     <Compile Include="Assets\Scripts\Game\UI\LevelSelectPanel.cs" />
     <Compile Include="Assets\Scripts\Game\UI\MainMenuPanel.Designer.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ChatController.cs" />
+    <Compile Include="Assets\Scripts\Game\Environment\BattleObstacle.cs" />
     <Compile Include="Assets\Scripts\Game\UI\MainMenuPanel.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ObjectSpin.cs" />
-    <Compile Include="Assets\Scripts\Game\Environment\BattleObstacle.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_PhoneNumberValidator.cs" />
     <Compile Include="Assets\Scripts\Game\Model\GameStateModel.cs" />
     <Compile Include="Assets\Scripts\Game\Environment\DestructibleRock.cs" />
@@ -122,6 +122,7 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TextMeshSpawner.cs" />
     <Compile Include="Assets\Scripts\Game\Entity\CameraFollow.cs" />
     <Compile Include="Assets\Scripts\Game\Model\PlayerModel.cs" />
+    <Compile Include="Assets\Scripts\Game\Entity\EmergencySupplyCrate.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexZoom.cs" />
     <Compile Include="Assets\Scripts\Game\Entity\Enemy.SpecialAI.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark02.cs" />
@@ -133,12 +134,13 @@
     <Compile Include="Assets\Scripts\Game\Config\BulletConfig.cs" />
     <Compile Include="Assets\Scripts\Game\Entity\Enemy.cs" />
     <Compile Include="Assets\Scripts\Game\System\WeaponSystem.cs" />
-    <Compile Include="Assets\Scripts\Game\Config\ShieldConfig.cs" />
     <Compile Include="Assets\Scripts\Game\Environment\BattleNavigation.cs" />
+    <Compile Include="Assets\Scripts\Game\Config\ShieldConfig.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\SkewTextExample.cs" />
     <Compile Include="Assets\Scripts\Game\Command\AddGoldCommand.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\WarpTextExample.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TextMeshProFloatingText.cs" />
+    <Compile Include="Assets\Scripts\Game\Combat\AmmoBatch.cs" />
     <Compile Include="Assets\Scripts\Game\Config\BulletConfigTable.cs" />
     <Compile Include="Assets\Scripts\Game\Model\EconomyModel.cs" />
     <Compile Include="Assets\Scripts\Game\Utility\GameUIKitConfig.cs" />
@@ -151,8 +153,8 @@
     <Compile Include="Assets\Scripts\Game\Entity\EnemyTelegraph.cs" />
     <Compile Include="Assets\Scripts\Game\Model\BulletInventoryModel.cs" />
     <Compile Include="Assets\Scripts\Game\Weapon\WeaponBase.cs" />
-    <Compile Include="Assets\Scripts\Game\UI\PausePanel.cs" />
     <Compile Include="Assets\Scripts\Game\Config\WaveConfigTable.cs" />
+    <Compile Include="Assets\Scripts\Game\UI\PausePanel.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark03.cs" />
     <Compile Include="Assets\Scripts\Game\Entity\AmmoPackPickup.cs" />
     <Compile Include="Assets\Scripts\Game\Entity\Player.cs" />
@@ -161,8 +163,8 @@
     <Compile Include="Assets\Scripts\Game\Config\EnemyConfig.cs" />
     <Compile Include="Assets\Scripts\Game\UI\GameHUD.cs" />
     <Compile Include="Assets\Scripts\Game\Config\StageConfig.cs" />
-    <Compile Include="Assets\Scripts\Game\System\EnemySpawnSystem.cs" />
     <Compile Include="Assets\Scripts\Game\Command\TakeBulletsCommand.cs" />
+    <Compile Include="Assets\Scripts\Game\System\EnemySpawnSystem.cs" />
     <Compile Include="Assets\Scripts\Game\Command\EquipShieldCommand.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextInfoDebugTool.cs" />
     <Compile Include="Assets\Scripts\Game\Entity\Bullet.cs" />
@@ -537,6 +539,10 @@
     </Reference>
     <Reference Include="Markdig">
       <HintPath>Assets\Scripts\QFramework\Toolkits\_CoreKit\PackageKit\Markdown\Markdig.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>Library\PackageCache\com.unity.nuget.newtonsoft-json@3.2.1\Runtime\Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="netstandard">
@@ -1027,6 +1033,10 @@
       <HintPath>C:\UnityEditor\Unity 2022.3.10f1\Editor\Data\NetStandard\compat\2.1.0\shims\netfx\System.Xml.Serialization.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="MCPForUnity.Runtime">
+      <HintPath>Library\ScriptAssemblies\MCPForUnity.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Unity.EditorCoroutines.Editor">
       <HintPath>Library\ScriptAssemblies\Unity.EditorCoroutines.Editor.dll</HintPath>
       <Private>False</Private>
@@ -1117,6 +1127,10 @@
     </Reference>
     <Reference Include="Unity.TextMeshPro.Editor">
       <HintPath>Library\ScriptAssemblies\Unity.TextMeshPro.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="MCPForUnity.Editor">
+      <HintPath>Library\ScriptAssemblies\MCPForUnity.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.VisualScripting.State">

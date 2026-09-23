@@ -75,6 +75,14 @@ public struct WeaponBrokenEvent
     public int SlotIndex;
 }
 
+public struct WeaponAmmoDroppedEvent
+{
+    public Vector3 Position;
+    public Caliber Caliber;
+    public int Level;
+    public AmmoBatch Ammo;
+}
+
 /// <summary>换弹时库存子弹不足（含完全无弹）广播，供 HUD 提示缺弹。</summary>
 public struct AmmoShortageEvent
 {
