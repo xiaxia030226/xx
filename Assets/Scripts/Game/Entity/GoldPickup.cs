@@ -1,57 +1,49 @@
 using QFramework;
 using UnityEngine;
 
-/// <summary>
-/// 金币掉落物：敌人死亡时生成，玩家靠近后磁吸飞行，接触入账（RunGold）并回池。
-/// 占位 prefab 由 Editor 菜单 Game/阶段三/生成缺失资源 产出（Resources/Prefabs/StageThree/GoldPickup），
-/// GameRoot.RegisterPickup 加载并注册入池。
-/// </summary>
+// 金币拾取物：接收本次金额，靠近玩家后磁吸并计入本局金币。
 public class GoldPickup : MonoBehaviour, IController
 {
-    // PoolKey：对象池 key，GameRoot 注册与生成、本类回收共用。
-    public const string PoolKey = "gold_pickup";
+    public const string PoolKey = "gold_pickup"; // 金币拾取物注册、生成和回收共用的池键。
 
-    // MagnetRadius：进入该半径后开始磁吸飞向玩家。
-    private const float MagnetRadius = 5f;
+    private const float MagnetRadius = 5f; // 开始磁吸的空间距离半径。
 
-    // CollectRadius：进入该半径后视为拾取成功。
-    private const float CollectRadius = 0.7f;
+    private const float CollectRadius = 0.7f; // 判定入账的空间距离半径。
 
-    // FlySpeed：磁吸飞行速度（米/秒）。
-    private const float FlySpeed = 9f;
+    private const float FlySpeed = 9f; // 磁吸移动速度，单位为米/秒。
 
-    // mGold：本枚金币的入账金额（掉落掷点结果）。
-    private int mGold;
+    private int mGold; // 本次拾取应计入本局的金币数。
 
-    // mTarget：吸附目标（玩家）。
-    private Transform mTarget;
+    private Transform mTarget; // 本次磁吸和拾取的玩家目标。
 
-    public IArchitecture GetArchitecture() => GameArchitecture.Interface;
+    // 作用：接入游戏架构；返回：游戏架构实例。
+    public IArchitecture GetArchitecture() => GameArchitecture.Interface; // 直接取游戏架构入口，供框架扩展方法访问模型和系统。
 
-    /// <summary>
-    /// 每次从对象池取出时调用，重置金额与吸附目标。
-    /// </summary>
+    // 作用：覆盖池对象本次金额与吸附目标；返回：无返回值。
     public void OnSpawn(int gold, Transform target)
     {
+        // 每次出池同时替换金额与玩家引用，后续磁吸和入账只使用本轮数据。
         mGold = gold;
         mTarget = target;
     }
 
+    // 作用：在允许拾取时磁吸金币并提交入账；返回：无返回值。
     private void Update()
     {
+        // 仅战斗和安全拾取阶段推进，目标丢失时不处理。
         if (mTarget == null) return;
         var state = this.GetModel<IGameStateModel>().State.Value;
         if (state != GameState.Playing && state != GameState.SafeLoot) return;
 
         var offset = mTarget.position - transform.position;
 
-        // 磁吸半径内：朝玩家匀速飞行。
+        // 两次判定共用移动前的三维距离，不在本帧移动后重新测距。
         if (offset.sqrMagnitude <= MagnetRadius * MagnetRadius)
         {
             transform.position = Vector3.MoveTowards(transform.position, mTarget.position, FlySpeed * Time.deltaTime);
         }
 
-        // 拾取半径内：入账本局金币并回池。
+        // 进入拾取半径后由命令入账，再将场景对象回池。
         if (offset.sqrMagnitude <= CollectRadius * CollectRadius)
         {
             this.SendCommand(new AddRunGoldCommand(mGold));

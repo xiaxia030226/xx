@@ -1,60 +1,53 @@
 using QFramework;
 using UnityEngine;
 
-/// <summary>
-/// 子弹包掉落物：敌人死亡时按掷点生成，玩家靠近后磁吸飞行，接触入库并回池。
-/// 占位 prefab 由 Editor 菜单 Game/阶段三/生成缺失资源 产出（Resources/Prefabs/StageThree/AmmoPackPickup），
-/// GameRoot.RegisterPickup 加载并注册入池。
-/// </summary>
+// 弹药拾取物：承载生成方传入的批次，靠近玩家后磁吸、入库并回池。
 public class AmmoPackPickup : MonoBehaviour, IController
 {
-    // PoolKey：对象池 key，GameRoot 注册与生成、本类回收共用。
-    public const string PoolKey = "ammo_pack_pickup";
+    public const string PoolKey = "ammo_pack_pickup"; // 弹药拾取物注册、生成和回收共用的池键。
 
-    // MagnetRadius：进入该半径后开始磁吸飞向玩家。
-    private const float MagnetRadius = 5f;
+    private const float MagnetRadius = 5f; // 开始磁吸的空间距离半径。
 
-    // CollectRadius：进入该半径后视为拾取成功。
-    private const float CollectRadius = 0.7f;
+    private const float CollectRadius = 0.7f; // 判定入库的空间距离半径。
 
-    // FlySpeed：磁吸飞行速度（米/秒）。
-    private const float FlySpeed = 9f;
+    private const float FlySpeed = 9f; // 磁吸移动速度，单位为米/秒。
 
-    private Caliber mCaliber;
-    private int mLevel;
-    private AmmoBatch mAmmo;
+    private Caliber mCaliber; // 此次生成弹药的口径。
+    private int mLevel; // 此次生成弹药的穿甲等级。
+    private AmmoBatch mAmmo; // 待入库批次，含数量及来源分类。
 
-    // mTarget：吸附目标（玩家）。
-    private Transform mTarget;
+    private Transform mTarget; // 本次磁吸和拾取的玩家目标。
 
-    public IArchitecture GetArchitecture() => GameArchitecture.Interface;
+    // 作用：接入游戏架构；返回：游戏架构实例。
+    public IArchitecture GetArchitecture() => GameArchitecture.Interface; // 直接取游戏架构入口，供框架扩展方法访问模型和系统。
 
-    /// <summary>
-    /// 每次从对象池取出时调用，重置含弹信息与吸附目标。
-    /// </summary>
+    // 作用：覆盖池对象本次携带的弹药与目标；返回：无返回值。
     public void OnSpawn(Caliber caliber, int level, AmmoBatch ammo, Transform target)
     {
+        // 批次来源由调用方传入，不沿用池中上一轮掉落的来源。
         mCaliber = caliber;
         mLevel = level;
         mAmmo = ammo;
         mTarget = target;
     }
 
+    // 作用：在允许拾取的状态下磁吸并提交弹药入库；返回：无返回值。
     private void Update()
     {
+        // 战斗与安全拾取阶段才推进；暂停及其他状态保留掉落物不动。
         if (mTarget == null) return;
         var state = this.GetModel<IGameStateModel>().State.Value;
         if (state != GameState.Playing && state != GameState.SafeLoot) return;
 
         var offset = mTarget.position - transform.position;
 
-        // 磁吸半径内：朝玩家匀速飞行。
+        // 使用移动前的三维距离判定磁吸与拾取，本帧移动后不重新测距。
         if (offset.sqrMagnitude <= MagnetRadius * MagnetRadius)
         {
             transform.position = Vector3.MoveTowards(transform.position, mTarget.position, FlySpeed * Time.deltaTime);
         }
 
-        // 拾取半径内：子弹入库并回池。
+        // 先清空批次与目标，再发命令，避免回调期间重复提交。
         if (offset.sqrMagnitude <= CollectRadius * CollectRadius)
         {
             var ammo = mAmmo;

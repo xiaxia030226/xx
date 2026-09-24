@@ -11,33 +11,27 @@ public class BulletConfig : ScriptableObject
 {
     [Header("身份")]
 
-    // mId：子弹唯一标识（bullet_s_0 等），约定由 AmmoTypes.BulletId 生成。
-    [SerializeField] private string mId;
+    [SerializeField] private string mId; // 子弹唯一标识，按 AmmoTypes.BulletId 的口径和等级规则命名。
 
-    // mName：显示名，用于实例化后在 Hierarchy 中命名子弹物体。
-    [SerializeField] private string mName;
+    [SerializeField] private string mName; // 子弹配置显示名。
 
     [Header("弹道")]
 
-    // mCaliber：子弹口径，同口径 6 个等级共享同一预制体与对象池。
-    [SerializeField] private Caliber mCaliber;
+    [SerializeField] private Caliber mCaliber; // 子弹口径，同口径各等级共用预制体和对象池。
 
-    // mPenetrationLevel：穿甲等级（0~5），决定伤害倍率与磨损系数（查 AmmoTypes 表）。
-    [SerializeField] private int mPenetrationLevel;
+    [SerializeField] private int mPenetrationLevel; // 穿甲等级，约定为 0～5。
 
-    // mSpeed：飞行速度（米/秒）。
-    [SerializeField] private float mSpeed;
+    [SerializeField] private float mSpeed; // 子弹飞行速度，单位为米/秒。
 
     [Header("预制体")]
 
-    // mPrefabPath：子弹预制体在 Resources 下的相对路径（不带扩展名）。
-    // 保留字符串寻址是为后续迁移 Addressables 预留——届时把该值改为 AA 地址即可。
-    [SerializeField] private string mPrefabPath;
+    [SerializeField] private string mPrefabPath; // 预制体在 Resources 下不含扩展名的相对路径。
 
-    public string Id => mId;
-    public string Name => mName;
-    public Caliber Caliber => mCaliber;
-    public int PenetrationLevel => mPenetrationLevel;
-    public float Speed => mSpeed;
-    public string PrefabPath => mPrefabPath;
+    public string Id => mId; // 子弹配置唯一标识。
+    public string Name => mName; // 子弹显示名。
+    public Caliber Caliber => mCaliber; // 子弹所属口径。
+    public int PenetrationLevel => mPenetrationLevel; // 配置的穿甲等级。
+    public float Speed => mSpeed; // 子弹飞行速度。
+    public string PrefabPath => mPrefabPath; // 子弹预制体资源路径。
+
 }

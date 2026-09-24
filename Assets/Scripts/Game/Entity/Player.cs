@@ -8,34 +8,39 @@ using UnityEngine;
 /// </summary>
 public class Player : MonoBehaviour, IController
 {
-    private readonly HashSet<PoisonArea> mPoisonSources = new HashSet<PoisonArea>();
-    private Collider mCollider;
+    private readonly HashSet<PoisonArea> mPoisonSources = new HashSet<PoisonArea>(); // 当前覆盖玩家的毒区集合，多来源不叠乘减速。
+    private Collider mCollider; // 玩家碰撞体，用于取得世界空间水平移动半径。
 
+    // 作用：按进出毒区更新减速来源集合；返回：无返回值。
     public void SetPoisonSource(PoisonArea source, bool inside)
     {
+        // 集合去重；离开一处毒区不影响其他仍覆盖玩家的毒区。
         if (inside) mPoisonSources.Add(source);
         else mPoisonSources.Remove(source);
     }
 
-    public void ClearPoisonSources() => mPoisonSources.Clear();
+    // 作用：立即清除全部毒区来源；返回：无返回值。
+    public void ClearPoisonSources() => mPoisonSources.Clear(); // 直接清空来源集合，使后续移动不再因旧毒区减速。
 
-    private void Awake() => mCollider = GetComponent<Collider>();
+    // 作用：缓存玩家自身碰撞体；返回：无返回值。
+    private void Awake() => mCollider = GetComponent<Collider>(); // 从当前对象取得碰撞体并缓存，供移动时计算水平半径。
 
-    private void OnDisable() => mPoisonSources.Clear();
+    // 作用：禁用时清理残留减速来源；返回：无返回值。
+    private void OnDisable() => mPoisonSources.Clear(); // 禁用时清空来源集合，避免再次启用后沿用旧毒区登记。
 
-    // ScrollThreshold：滚轮切换武器的判定阈值，过滤滚动结束前的微小抖动。
-    private const float ScrollThreshold = 0.1f;
+    private const float ScrollThreshold = 0.1f; // 滚轮切换阈值，用于过滤微小滚动输入。
 
-    // mMainCamera：主相机缓存，用于把鼠标屏幕坐标转换成地面上的世界坐标。
-    private Camera mMainCamera;
+    private Camera mMainCamera; // 将鼠标屏幕位置投影到地面的主相机缓存。
 
-    // mWeaponSystem：武器系统缓存，避免每帧重复向架构查找。
-    private IWeaponSystem mWeaponSystem;
+    private IWeaponSystem mWeaponSystem; // 惰性获取的武器系统，避免重复查找。
 
-    public IArchitecture GetArchitecture() => GameArchitecture.Interface;
+    // 作用：接入游戏架构；返回：游戏架构实例。
+    public IArchitecture GetArchitecture() => GameArchitecture.Interface; // 直接取游戏架构入口，供框架扩展方法访问模型和系统。
 
+    // 作用：按游戏状态分派移动、瞄准及武器输入；返回：无返回值。
     private void Update()
     {
+        // 安全拾取可走动和转向，但只有战斗阶段允许攻击、换弹和切枪。
         var state = this.GetModel<IGameStateModel>().State.Value;
         if (state != GameState.Playing && state != GameState.SafeLoot) return;
         HandleMove();
@@ -46,11 +51,10 @@ public class Player : MonoBehaviour, IController
         HandleWeaponSwitch();
     }
 
-    /// <summary>
-    /// 处理换弹与子弹等级切换：R 主动换弹，B 循环切换下次装填的穿甲等级（各枪独立记忆）。
-    /// </summary>
+    // 作用：将换弹和下次装填等级切换输入交给武器系统；返回：无返回值。
     private void HandleWeaponOps()
     {
+        // 两个输入独立检测，同一帧都按下时先请求换弹再切换下次等级。
         if (GameInput.Reload.WasPressedThisFrame())
         {
             GetWeaponSystem().RequestReloadCurrent();
@@ -62,12 +66,9 @@ public class Player : MonoBehaviour, IController
         }
     }
 
-    /// <summary>
-    /// 读取 WASD 输入并移动玩家，移动速度从 PlayerModel 读取，位置限制在地图边界内。
-    /// </summary>
+    // 作用：读取平面移动输入并经导航处理减速、避障和边界；返回：无返回值。
     private void HandleMove()
     {
-        // moveInput：WASD 合成的移动方向向量（x 为左右，y 为前后）。
         var moveInput = GameInput.Move.ReadValue<Vector2>();
 
         // 斜向同时按两个键时向量长度会大于 1，归一化可避免斜向移动更快。
@@ -76,39 +77,34 @@ public class Player : MonoBehaviour, IController
             moveInput.Normalize();
         }
 
-        // speed：从 Model 读取移动速度，玩家属性统一由 Model 管理。
         var speed = this.GetModel<IPlayerModel>().MoveSpeed.Value;
 
+        // 有任一毒区来源就减速一次，再用碰撞体水平半径交给导航扫掠滑移。
         if (mPoisonSources.Count > 0) speed *= 0.8f;
         var displacement = new Vector3(moveInput.x, 0f, moveInput.y) * (speed * Time.deltaTime);
         var radius = Mathf.Max(mCollider.bounds.extents.x, mCollider.bounds.extents.z);
         transform.position = GameRoot.Environment.Navigation.Move(transform.position, displacement, radius, mCollider);
     }
 
-    /// <summary>
-    /// 让玩家始终面向鼠标指向的地面位置。
-    /// </summary>
+    // 作用：将鼠标投影到地面并让玩家水平朝向该位置；返回：无返回值。
     private void FaceMouse()
     {
-        // 第一次调用时查找主相机并缓存，之后不再重复查找。
+        // 第一次调用时查找主相机并缓存，缺少相机时跳过。
         if (mMainCamera == null)
         {
             mMainCamera = Camera.main;
             if (mMainCamera == null) return;
         }
 
-        // ray：从相机经过鼠标屏幕位置发出的射线。
-        // 与 y=0 的数学平面求交，不依赖 Collider，适合只计算鼠标在地面上的指向。
+        // 与 y=0 的数学平面求交，不依赖场景碰撞体；未命中地面时保持朝向。
         var ray = mMainCamera.ScreenPointToRay(GameInput.MousePosition.ReadValue<Vector2>());
         var plane = new Plane(Vector3.up, Vector3.zero);
 
-        // enter：射线到达平面的距离；未命中平面时跳过转向。
         if (plane.Raycast(ray, out float enter))
         {
-            // hit：鼠标指向的地面世界坐标。
             var hit = ray.GetPoint(enter);
 
-            // dir：玩家指向鼠标的水平方向（忽略高度差）。
+            // 忽略高度差，避免角色跟随俯视射线发生倾斜。
             var dir = hit - transform.position;
             dir.y = 0f;
 
@@ -120,18 +116,13 @@ public class Player : MonoBehaviour, IController
         }
     }
 
-    /// <summary>
-    /// 按当前武器的触发方式处理攻击输入：
-    /// 非自动武器（手枪）用 WasPressedThisFrame——按下瞬间只发一次；
-    /// 自动武器（机枪）用 IsPressed——长按期间每帧尝试，射速由武器攻击间隔限制。
-    /// </summary>
+    // 作用：按当前武器的自动或单发模式请求攻击；返回：无返回值。
     private void HandleAttack()
     {
-        // weapon：当前手持武器；尚未初始化完成时本帧不处理攻击。
         var weapon = GetWeaponSystem().CurrentWeapon;
         if (weapon == null) return;
 
-        // triggered：本帧是否触发了攻击输入，按武器类型选择检测方式。
+        // 自动武器长按逐帧尝试，单发武器只响应按下瞬间；射速等限制由武器系统判定。
         var triggered = weapon.IsAutomatic
             ? GameInput.Attack.IsPressed()
             : GameInput.Attack.WasPressedThisFrame();
@@ -142,12 +133,10 @@ public class Player : MonoBehaviour, IController
         }
     }
 
-    /// <summary>
-    /// 处理武器切换：数字键 1-9 直接切到对应槽位，滚轮上下滚动按顺序循环切换。
-    /// </summary>
+    // 作用：将槽位按键和滚轮输入转为切换武器请求；返回：无返回值。
     private void HandleWeaponSwitch()
     {
-        // 遍历 1-9 数字键，哪个键在这一帧被按下，就切到对应槽位（下标 = 数字 - 1）。
+        // 遍历全部槽位按键，再处理滚轮；同帧多个输入会按此顺序依次提交。
         for (var i = 0; i < GameInput.SwitchSlots.Length; i++)
         {
             if (GameInput.SwitchSlots[i].WasPressedThisFrame())
@@ -168,11 +157,10 @@ public class Player : MonoBehaviour, IController
         }
     }
 
-    /// <summary>
-    /// 获取武器系统；首次访问时向架构查找并缓存，之后直接复用。
-    /// </summary>
+    // 作用：首次查询并缓存武器系统，后续复用；返回：当前架构的武器系统。
     private IWeaponSystem GetWeaponSystem()
     {
+        // 仅在缓存为空时从架构查询，供攻击、换弹和切枪等入口复用同一引用。
         if (mWeaponSystem == null)
         {
             mWeaponSystem = this.GetSystem<IWeaponSystem>();

@@ -9,8 +9,10 @@ using UnityEngine;
 /// </summary>
 public class MainMenuRoot : MonoBehaviour, IController
 {
-    public IArchitecture GetArchitecture() => GameArchitecture.Interface;
+    // 作用：提供菜单控制器所属的 QFramework 架构；返回：全局游戏架构接口。
+    public IArchitecture GetArchitecture() => GameArchitecture.Interface; // 直接委托给架构单例入口。
 
+    // 作用：在主菜单场景唤醒时初始化公共入口并打开菜单；返回：无返回值。
     private void Awake()
     {
         // 第一步：输入与架构初始化。GameInput.Init 幂等，架构单例跨场景只创建一次。

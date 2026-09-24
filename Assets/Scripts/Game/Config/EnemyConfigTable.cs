@@ -1,51 +1,41 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// 敌人配置查询表。配置数据以 ScriptableObject 资产的形式存放在
-/// Resources/Configs/Enemies/ 文件夹下，首次访问时一次性加载填充。
-/// 新增敌人：在该文件夹右键 Create → Game → 敌人配置，填好字段即可，代码零改动。
-/// </summary>
+/// <summary>按敌人标识查询配置，首次访问时加载 Resources/Configs/Enemies 中的资产。</summary>
 public static class EnemyConfigTable
 {
-    public const string SlimeGreenId = "slime_green";
-    public const string SlimeRedId = "slime_red";
-    public const string GoblinId = "goblin";
-    public const string ArcherId = "archer";
-    public const string WolfId = "wolf";
-    public const string SpiderId = "spider";
-    public const string TreantId = "treant";
-    public const string MageId = "mage";
-    public const string RamId = "ram";
-    public const string DrummerId = "drummer";
-    public const string SplitterId = "splitter";
-    public const string SlimeKingId = "slime_king";
+    public const string SlimeGreenId = "slime_green"; // 绿史莱姆配置标识。
+    public const string SlimeRedId = "slime_red"; // 红史莱姆配置标识。
+    public const string GoblinId = "goblin"; // 哥布林小兵配置标识。
+    public const string ArcherId = "archer"; // 哥布林弓手配置标识。
+    public const string WolfId = "wolf"; // 森林狼配置标识。
+    public const string SpiderId = "spider"; // 毒蜘蛛配置标识。
+    public const string TreantId = "treant"; // 树精配置标识。
+    public const string MageId = "mage"; // 暗影法师配置标识。
+    public const string RamId = "ram"; // 撞角兽配置标识。
+    public const string DrummerId = "drummer"; // 护盾鼓手配置标识。
+    public const string SplitterId = "splitter"; // 分裂囊虫配置标识。
+    public const string SlimeKingId = "slime_king"; // 史莱姆王配置标识。
 
-    // ConfigsFolder：敌人配置资产在 Resources 下的相对文件夹路径。
-    private const string ConfigsFolder = "Configs/Enemies";
+    private const string ConfigsFolder = "Configs/Enemies"; // 敌人配置在 Resources 下的相对目录。
 
-    // sConfigs：懒加载的配置字典（敌人 id → 配置资产），首次访问时从 Resources 加载填充。
-    private static Dictionary<string, EnemyConfig> sConfigs;
+    private static Dictionary<string, EnemyConfig> sConfigs; // 敌人标识到配置资产的缓存字典。
 
-    // Configs：配置字典访问入口；sConfigs 为 null 时触发一次性加载。
-    private static Dictionary<string, EnemyConfig> Configs => sConfigs ??= LoadAll();
+    private static Dictionary<string, EnemyConfig> Configs => sConfigs ??= LoadAll(); // 首次访问加载全部配置，之后复用缓存。
 
-    // AllIds：配置表中全部敌人 id 的只读集合，供刷怪系统遍历注册对象池。
-    public static IReadOnlyCollection<string> AllIds => Configs.Keys;
+    public static IReadOnlyCollection<string> AllIds => Configs.Keys; // 配置表包含的全部敌人标识。
 
-    /// <summary>
-    /// 安全查询配置：找不到时返回 false，适合调用方自行处理缺失情况。
-    /// </summary>
+    // 作用：尝试按标识查询敌人配置；返回：存在为 true，否则为 false；out config 为对应配置或 null。
     public static bool TryGet(string id, out EnemyConfig config)
     {
+        // 缺失情况交给调用方处理，不使用替代敌人配置。
         return Configs.TryGetValue(id, out config);
     }
 
-    /// <summary>
-    /// 必须取得配置：id 错误时直接抛出异常，便于尽早发现配置问题。
-    /// </summary>
+    // 作用：取得必须存在的敌人配置；返回：对应配置，标识缺失时抛出 KeyNotFoundException。
     public static EnemyConfig Get(string id)
     {
+        // 明确抛出缺失标识，避免生成与波次配置不符的敌人。
         if (!Configs.TryGetValue(id, out var config))
         {
             throw new KeyNotFoundException($"未找到敌人配置：{id}");
@@ -54,16 +44,14 @@ public static class EnemyConfigTable
         return config;
     }
 
-    /// <summary>
-    /// 从 Resources/Configs/Enemies 加载全部敌人配置资产并填入字典。
-    /// </summary>
+    // 作用：加载敌人资产并建立标识索引；返回：每个标识保留首个资产的配置字典。
     private static Dictionary<string, EnemyConfig> LoadAll()
     {
         var configs = new Dictionary<string, EnemyConfig>();
 
         foreach (var config in Resources.LoadAll<EnemyConfig>(ConfigsFolder))
         {
-            // id 是字典的 key，重复时后加载的资产会覆盖先加载的，数据就乱了，因此直接报错提示。
+            // 重复标识记录错误并跳过，不覆盖已经登记的资产。
             if (configs.ContainsKey(config.Id))
             {
                 Debug.LogError($"[EnemyConfig] 敌人 id 重复：{config.Id}（资产 {config.name}）");

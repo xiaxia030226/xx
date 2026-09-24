@@ -18,10 +18,11 @@ using Object = UnityEngine.Object;
 /// </summary>
 public static class StageThreeValidation
 {
-    private const string ResourceMenu = "Game/阶段三/校验资源（只读）";
-    private const string LogicMenu = "Game/阶段三/运行逻辑断言";
-    private static readonly float[] ShieldCapacities = { 0f, 50f, 100f, 150f, 220f, 300f };
+    private const string ResourceMenu = "Game/阶段三/校验资源（只读）"; // 只读资源检查菜单路径。
+    private const string LogicMenu = "Game/阶段三/运行逻辑断言"; // 隔离逻辑断言菜单路径。
+    private static readonly float[] ShieldCapacities = { 0f, 50f, 100f, 150f, 220f, 300f }; // 按护盾等级索引的预期容量，零级表示无盾。
 
+    // 作用：只读检查资源合同与静态装配，不替代完整 Play 验收；返回：无返回值。
     [MenuItem(ResourceMenu)]
     private static void ValidateResources()
     {
@@ -39,9 +40,11 @@ public static class StageThreeValidation
         report.Finish();
     }
 
+    // 作用：汇总伤害纯计算与隔离枪械换弹断言，并列出未执行范围；返回：无返回值。
     [MenuItem(LogicMenu)]
     private static void RunLogicAssertions()
     {
+        // 分区隔离伤害与换弹断言的失败，再列出未执行范围以限定汇总结论。
         var report = new Report("逻辑断言");
         report.Section("DamageResolver", () => ValidateDamage(report));
         report.Section("真实 GunWeapon 换弹", () => ValidateReloads(report));
@@ -51,10 +54,12 @@ public static class StageThreeValidation
         report.Finish();
     }
 
+    // 作用：直接计算两个校验菜单的可用状态；返回：true 表示未播放、未切换到播放且未编译，false 表示禁止校验。
     [MenuItem(ResourceMenu, true)]
     [MenuItem(LogicMenu, true)]
-    private static bool CanValidate() => !EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isCompiling;
+    private static bool CanValidate() => !EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isCompiling; // 同时排除播放切换与编译阶段，只开放稳定的编辑状态。
 
+    // 作用：核对子弹数量、唯一 ID、口径等级、弹速及根组件；返回：无返回值。
     private static void ValidateBullets(Report report)
     {
         var configs = ReadCatalog<BulletConfig>(report, "Configs/Bullets", c => c.Id);
@@ -82,17 +87,21 @@ public static class StageThreeValidation
         }
     }
 
+    // 作用：读取枪械目录并逐一核对三种枪的资源合同；返回：无返回值。
     private static void ValidateWeapons(Report report)
     {
+        // 共用一次目录读取结果，分别传入三种枪的独立预期值进行核对。
         var configs = ReadCatalog<WeaponConfig>(report, "Configs/Weapons", c => c.Id);
         ValidateWeapon(report, configs, "pistol", Caliber.S, 100f, 12, 10f, 1.5f, false, 0f, 0.25f);
         ValidateWeapon(report, configs, "machinegun", Caliber.AR, 240f, 50, 6f, 2.5f, true, 600f, 0.25f);
         ValidateWeapon(report, configs, "smg", Caliber.S, 160f, 30, 8f, 1.8f, true, 720f, 0.25f);
     }
 
+    // 作用：核对单种枪械的数值、射速模式与磁盘迁移字段；返回：无返回值。
     private static void ValidateWeapon(Report report, WeaponConfig[] configs, string id, Caliber caliber,
         float durability, int magazine, float damage, float reload, bool automatic, float rpm, float semiAutoInterval)
     {
+        // 加载后的默认值与磁盘显式字段分开检查，避免误判旧配置已经迁移。
         report.Check($"枪械 {id}：{caliber} / 耐久{durability} / 容量{magazine} / 伤害{damage}", () =>
         {
             var config = Unique(configs, c => c.Id == id, id);
@@ -111,13 +120,15 @@ public static class StageThreeValidation
 
     private sealed class EnemyExpected
     {
-        public readonly string Code, Id;
-        public readonly int Health, Damage, AttackLevel;
-        public readonly EnemyAIType AI;
-        public readonly EnemyCategory Category;
+        public readonly string Code, Id; // Code：设计编号；Id：预期的唯一配置标识。
+        public readonly int Health, Damage, AttackLevel; // Health：预期生命上限；Damage：接触伤害；AttackLevel：攻击等级。
+        public readonly EnemyAIType AI; // 预期的敌人行为类型。
+        public readonly EnemyCategory Category; // 预期的敌人分类。
+        // 作用：记录独立于被测资源的敌人期望值；返回：无返回值（构造函数）。
         public EnemyExpected(string code, string id, int health, int damage, int attackLevel,
             EnemyAIType ai, EnemyCategory category = EnemyCategory.Normal)
         {
+            // 将设计标识与战斗、行为预期绑定在一起，供逐敌人比对时统一取值。
             Code = code; Id = id; Health = health; Damage = damage; AttackLevel = attackLevel;
             AI = ai; Category = category;
         }
@@ -137,10 +148,12 @@ public static class StageThreeValidation
         new EnemyExpected("N02", "drummer", 60, 6, 0, EnemyAIType.ShieldDrummer, EnemyCategory.Mechanism),
         new EnemyExpected("N03", "splitter", 40, 8, 0, EnemyAIType.Split),
         new EnemyExpected("B01", "slime_king", 650, 20, 1, EnemyAIType.SlimeKing, EnemyCategory.Boss)
-    };
+    }; // 十二类敌人的独立预期规格，用于对照正式配置。
 
+    // 作用：核对敌人属性、预制体静态接线和旧 E01 的掉落字段；返回：无返回值。
     private static void ValidateEnemies(Report report)
     {
+        // 逐敌人分别报告属性与装配，引用检查不触发 AI 或技能表现。
         var configs = ReadCatalog<EnemyConfig>(report, "Configs/Enemies", c => c.Id);
         foreach (var expected in ExpectedEnemies)
         {
@@ -190,8 +203,10 @@ public static class StageThreeValidation
         });
     }
 
+    // 作用：检查护盾配置恰有五级且每级容量符合预期；返回：无返回值。
     private static void ValidateShields(Report report)
     {
+        // 先核对配置总数，再逐级检查唯一项及容量，避免数量正确却等级缺漏。
         var configs = ReadCatalog<ShieldConfig>(report, "Configs/Shields", c => c.Level.ToString());
         report.Check("护盾：恰好 5 个等级", () => Require(configs.Length == 5, $"实际 {configs.Length} 个，预期 5。"));
         for (var level = 1; level <= 5; level++)
@@ -203,7 +218,7 @@ public static class StageThreeValidation
         }
     }
 
-    // 这里只描述正式资源合同，不复制/模拟 EnemySpawnSystem 的调度实现。
+    // 作用：构造正式资源合同的六波预期值，不模拟 EnemySpawnSystem 调度；返回：新建的波次合同数组。
     private static WaveConfig[] ExpectedWaves() => new[]
     {
         new WaveConfig(1, 0f, new[] { new SpawnGroup("slime_green", 18, 0f) }),
@@ -212,10 +227,12 @@ public static class StageThreeValidation
         new WaveConfig(4, 50f, new[] { new SpawnGroup("splitter", 8, 0f), new SpawnGroup("slime_green", 18, 0f, 1) }),
         new WaveConfig(5, 50f, new[] { new SpawnGroup("archer", 8, 0f), new SpawnGroup("ram", 2, 0f, 1), new SpawnGroup("drummer", 2, 0f, 1), new SpawnGroup("slime_green", 20, 0f) }),
         new WaveConfig(6, 60f, new[] { new SpawnGroup("slime_king", 1, 0f, 2) }, true)
-    };
+    }; // 按波序固定分组、数量与盾级，作为独立于正式配置的比对基准。
 
+    // 作用：检查第一关波次合同、人数血盾预算、枪池奖励及环境引用；返回：无返回值。
     private static void ValidateStage(Report report)
     {
+        // 逐波逐组比对静态数据，汇总预算只做算术，不运行出生、战斗或导航流程。
         var stages = ReadCatalog<StageConfig>(report, "Configs/Stages", c => c.Level.ToString());
         Func<StageConfig> stage = () => Unique(stages, c => c.Level == 1, "Stage1");
         var expected = ExpectedWaves();
@@ -295,14 +312,18 @@ public static class StageThreeValidation
         });
     }
 
+    // 作用：断言目标波次存在并读取它；返回：指定索引的非空 WaveConfig。
     private static WaveConfig WaveAt(StageConfig stage, int index)
     {
+        // 先确认波次列表及目标项存在，再返回目标波，避免缺项变成后续空引用错误。
         Require(stage.Waves != null && stage.Waves.Count > index && stage.Waves[index] != null, "缺少波 " + (index + 1));
         return stage.Waves[index];
     }
 
+    // 作用：验证六波的生成组合法性并展平以便统计；返回：所有有效生成组的数组。
     private static SpawnGroup[] StageGroups(StageConfig stage)
     {
+        // 先验证波、组与盾级范围，避免缺项或非法值掩盖汇总错误。
         Require(stage.Waves != null && stage.Waves.Count == 6, "汇总依赖完整六波。");
         var groups = new List<SpawnGroup>();
         for (var i = 0; i < stage.Waves.Count; i++)
@@ -318,6 +339,7 @@ public static class StageThreeValidation
         return groups.ToArray();
     }
 
+    // 作用：检查拾取物、敌弹与毒区预制体路径及必要组件引用；返回：无返回值。
     private static void ValidateCombatPrefabs(Report report)
     {
         report.Check("GoldPickup：GameRoot 的 StageThree 路径", () => RequirePrefab<GoldPickup>("Prefabs/StageThree/GoldPickup"));
@@ -336,8 +358,10 @@ public static class StageThreeValidation
         report.Note("EnemyTelegraph/PoisonArea 只查已核实的序列化引用，不声明视觉效果、毒区减速或池复用通过。");
     }
 
+    // 作用：只读检查 HUD 护盾、结算节点及预告区域高度，将装配缺项标为待处理；返回：无返回值。
     private static void ValidateHud(Report report)
     {
+        // 分项检查节点接线和预告高度，装配不足记为待处理，不冒充运行时交互验收。
         Func<GameObject> hud = () => RequirePrefab<Game.UI.GameHUD>("UI/GameHUD");
         ValidateHudNode<Image>(report, hud, "ShieldFill");
         ValidateHudNode<TextMeshProUGUI>(report, hud, "ShieldText");
@@ -352,8 +376,10 @@ public static class StageThreeValidation
         report.Skip("HUD 新字段的运行时订阅/按钮点击接线未执行；有节点、Bind 或序列化引用都不等于业务已接通。");
     }
 
+    // 作用：分别检查 HUD 指定节点组件、Bind 及 Designer 序列化引用；返回：无返回值。
     private static void ValidateHudNode<T>(Report report, Func<GameObject> hud, string name) where T : Component
     {
+        // 只检存在性和引用对应关系，不调用会写字段的 getter，也不补装节点。
         report.Check("HUD 待装配检查：" + name + " 节点/组件", () =>
         {
             var component = NamedNode(hud(), name).GetComponent<T>();
@@ -375,11 +401,14 @@ public static class StageThreeValidation
         }, true);
     }
 
+    // 作用：直接委托 Unique 查找包含未激活节点的同名 HUD 节点；返回：唯一匹配的 Transform，缺失或重名时抛出异常。
     private static Transform NamedNode(GameObject prefab, string name) =>
-        Unique(prefab.GetComponentsInChildren<Transform>(true), t => t.name == name, "HUD 节点 " + name);
+        Unique(prefab.GetComponentsInChildren<Transform>(true), t => t.name == name, "HUD 节点 " + name); // 纳入隐藏节点并强制名称唯一，避免接线检查误取重名项。
 
+    // 作用：遍历阵营、攻盾等级与边界案例验证伤害分配和连续破盾；返回：无返回值。
     private static void ValidateDamage(Report report)
     {
+        // 独立计算预期分配再调用解析器，仅验证纯计算，不触发伤害命令或破盾事件。
         foreach (var faction in new[] { CombatFaction.Player, CombatFaction.Enemy })
         for (var attack = 0; attack <= 5; attack++)
         for (var shield = 0; shield <= 5; shield++)
@@ -439,12 +468,15 @@ public static class StageThreeValidation
         }
     }
 
+    // 作用：直接委托报告器执行一条指定预期的伤害案例；返回：无返回值。
     private static void DamageExample(Report report, string name, DamageInfo hit, int level, float capacity,
         float health, float shield, bool broke) =>
-        report.Check(name, () => AssertDamage(hit, level, capacity, health, shield, broke));
+        report.Check(name, () => AssertDamage(hit, level, capacity, health, shield, broke)); // 将单例参数封装为断言回调，由报告器捕获并记录结果。
 
+    // 作用：核对真实伤害计算的血伤、盾伤、守恒关系和破盾标记；返回：无返回值。
     private static void AssertDamage(DamageInfo hit, int level, float capacity, float health, float shield, bool broke)
     {
+        // 只计算一次实际结果，再分别核对血盾分配、总量守恒、容量边界与破盾标记。
         var actual = DamageResolver.Calculate(hit, level, capacity);
         var label = $"伤害{hit.Amount}/攻{hit.PenetrationLevel}/盾{level}/余{capacity}";
         Near(actual.HealthDamage, health, label + " 血伤");
@@ -454,8 +486,10 @@ public static class StageThreeValidation
         Require(actual.BrokeShield == broke, label + " 破盾标记错误。");
     }
 
+    // 作用：逐例验证真实枪械同级补弹、换级预扣、缺弹、取消及报废边界；返回：无返回值。
     private static void ValidateReloads(Report report)
     {
+        // 每例重新创建隔离夹具，按准备库存、发起请求、手动 Tick、核对事件与守恒的顺序验证。
         GunCase(report, "同级保留余弹、仅预扣缺口、重复请求不重扣、满弹不再装填", f =>
         {
             f.Seed(0, 20); f.SetResource(5); f.ClearEvents();
@@ -555,10 +589,12 @@ public static class StageThreeValidation
         });
     }
 
+    // 作用：在自动释放的独立枪械夹具中执行并报告单条换弹案例；返回：无返回值。
     private static void GunCase(Report report, string name, Action<GunFixture> test)
     {
         report.Check("GunWeapon：" + name, () =>
         {
+            // 即使断言抛出异常，using 仍释放订阅、测试架构和临时配置。
             using (var fixture = new GunFixture()) test(fixture);
         });
     }
@@ -567,9 +603,15 @@ public static class StageThreeValidation
     // 此泛型闭包只属于测试；不注册正式架构、不注册玩家/经济/存档模型，不注册任何池工厂。
     private sealed class ReloadTestArchitecture : Architecture<ReloadTestArchitecture>
     {
-        public ReloadTestArchitecture() { }
+        // 作用：提供独立换弹架构的空构造入口，注册由 Init 完成；返回：无返回值（构造函数）。
+        public ReloadTestArchitecture()
+        {
+            // 依赖注册交给 Init，保持构造阶段不访问尚未就绪的模型和系统。
+        }
+        // 作用：仅注册换弹需要的库存模型与禁止生成对象的池替身；返回：无返回值。
         protected override void Init()
         {
+            // 仅提供独立库存和禁止生成对象的池替身，将测试范围限制在换弹逻辑。
             RegisterModel<IBulletInventoryModel>(new BulletInventoryModel());
             RegisterSystem<IGameObjectPoolSystem>(new ReloadTestPool());
         }
@@ -577,30 +619,47 @@ public static class StageThreeValidation
 
     private sealed class ReloadTestPool : AbstractSystem, IGameObjectPoolSystem
     {
-        protected override void OnInit() { }
+        // 作用：保留空初始化入口，不创建池或预热对象；返回：无返回值。
+        protected override void OnInit()
+        {
+            // 换弹断言不需要场景对象，初始化时不注册工厂或预热。
+        }
+        // 作用：直接抛出异常，阻止换弹测试注册工厂或执行预热；返回：无返回值。
         public void Register(string key, Func<GameObject> factory, int initialCount = 0) =>
-            throw new InvalidOperationException("阶段三换弹断言不应注册池工厂。");
+            throw new InvalidOperationException("阶段三换弹断言不应注册池工厂。"); // 以异常暴露越界的池注册调用，不允许隐式预热。
+        // 作用：直接拒绝换弹测试生成对象；返回：始终抛出异常，不返回 GameObject。
         public GameObject Spawn(string key, Vector3 position, Quaternion rotation, Transform parent = null) =>
-            throw new InvalidOperationException("阶段三换弹断言不应生成对象。");
-        public void Recycle(string key, GameObject instance) { }
-        public int GetCachedCount(string key) => 0;
-        public void ClearAll() { }
+            throw new InvalidOperationException("阶段三换弹断言不应生成对象。"); // 发现生成请求立即失败，防止换弹断言夹带场景对象副作用。
+        // 作用：满足池接口的回收入口，本替身没有对象可回收；返回：无返回值。
+        public void Recycle(string key, GameObject instance)
+        {
+            // 替身没有创建过池对象，回收入口不接管或修改传入实例。
+        }
+        // 作用：直接报告替身没有缓存对象；返回：固定为 0。
+        public int GetCachedCount(string key) => 0; // 替身不创建或持有对象，缓存计数始终为零。
+        // 作用：满足池接口的空清理入口，本替身不持有资源；返回：无返回值。
+        public void ClearAll()
+        {
+            // 没有工厂、缓存或租出对象，不需要执行资源释放。
+        }
     }
 
     private sealed class GunFixture : IDisposable
     {
-        private WeaponConfig mConfig;
-        private IArchitecture mArchitecture;
-        private IUnRegister mInventorySubscription, mShortageSubscription;
-        public GunWeapon Gun { get; private set; }
-        public IBulletInventoryModel Inventory { get; private set; }
-        public readonly List<BulletInventoryChangedEvent> Changes = new List<BulletInventoryChangedEvent>();
-        public readonly List<AmmoShortageEvent> Shortages = new List<AmmoShortageEvent>();
+        private WeaponConfig mConfig; // 夹具独占的内存武器配置，释放时销毁。
+        private IArchitecture mArchitecture; // 仅供本条换弹案例使用的独立架构。
+        private IUnRegister mInventorySubscription, mShortageSubscription; // mInventorySubscription：库存事件注销句柄；mShortageSubscription：缺弹事件注销句柄。
+        public GunWeapon Gun { get; private set; } // 本夹具测试的真实枪械实例。
+        public IBulletInventoryModel Inventory { get; private set; } // 独立架构中的测试弹药库存。
+        public readonly List<BulletInventoryChangedEvent> Changes = new List<BulletInventoryChangedEvent>(); // 按发送顺序捕获的库存变化事件。
+        public readonly List<AmmoShortageEvent> Shortages = new List<AmmoShortageEvent>(); // 捕获的缺弹提示事件。
 
+        // 作用：创建临时配置、清空隔离库存并构造真实枪械与事件监听；返回：无返回值（构造函数）。
         public GunFixture()
         {
             try
             {
+                // HideAndDontSave 使测试配置不进入资源保存；仍须在 Dispose 中显式销毁。
                 mConfig = ScriptableObject.CreateInstance<WeaponConfig>();
                 mConfig.hideFlags = HideFlags.HideAndDontSave;
                 var serialized = new SerializedObject(mConfig);
@@ -634,12 +693,21 @@ public static class StageThreeValidation
             }
         }
 
-        public void Seed(int level, int count) => mArchitecture.SendCommand(new AddBulletsCommand(Caliber.S, level, AmmoBatch.Loot(count)));
+        // 作用：直接发送命令，为 S 口径指定等级加入 Loot 来源弹药；返回：无返回值。
+        public void Seed(int level, int count) => mArchitecture.SendCommand(new AddBulletsCommand(Caliber.S, level, AmmoBatch.Loot(count))); // 用真实入库命令准备全 Loot 初态，保留正常库存更新流程。
+        // 作用：直接断言 S 口径指定等级库存等于预期；返回：无返回值。
         public void Count(int level, int expected) =>
-            Require(Inventory.GetCount(Caliber.S, level) == expected, $"S·{level} 库存实际 {Inventory.GetCount(Caliber.S, level)}，预期 {expected}。");
-        public void ClearEvents() { Changes.Clear(); Shortages.Clear(); }
+            Require(Inventory.GetCount(Caliber.S, level) == expected, $"S·{level} 库存实际 {Inventory.GetCount(Caliber.S, level)}，预期 {expected}。"); // 定位指定等级的 S 弹药桶，直接比较操作后的库存数量。
+        // 作用：清空已捕获事件，以单独核对下一步操作的副作用；返回：无返回值。
+        public void ClearEvents()
+        {
+            // 同时清掉库存变化与缺弹记录，避免准备阶段的事件干扰下一步断言。
+            Changes.Clear(); Shortages.Clear();
+        }
+        // 作用：检查弹夹总量、Loot 来源守恒及两种换弹状态表示；返回：无返回值。
         public void State(float resource, bool reloading)
         {
+            // 先核对弹夹数量与来源守恒，再交叉检查布尔和枚举两种换弹状态。
             Near(Gun.Resource, resource, "弹夹余弹");
             var ammo = Gun.LoadedAmmo;
             Near(ammo.Count, resource, "LoadedAmmo.Count 与 Resource 一致");
@@ -649,6 +717,7 @@ public static class StageThreeValidation
             Require(Gun.IsReloading == reloading, "IsReloading 不匹配。");
             Require(Gun.State == (reloading ? WeaponState.Reloading : WeaponState.Ready), "WeaponState 不匹配。");
         }
+        // 作用：通过反射设置已知的全 Loot 弹夹余弹测试初态；返回：无返回值。
         public void SetResource(float value)
         {
             // 只设置已知测试初态，模拟已有余弹；绝不调用 TryAttack/DoAttack 或创建 owner。
@@ -660,28 +729,36 @@ public static class StageThreeValidation
             Require(supply != null, "GunWeapon.mLoadedSupplyCount 不存在。");
             supply.SetValue(Gun, 0);
         }
+        // 作用：准备一级弹夹余四发、一级库存八发的换级测试初态；返回：无返回值。
         public void PrepareLevelOneWithFourRounds()
         {
+            // 先走真实换弹流程，再用反射模拟已消耗的余弹，不触发真实开火。
             Seed(1, 20); Gun.CycleNextLoadLevel(); Gun.RequestReload(); Gun.Tick(1.1f);
             Require(Gun.LoadedLevel == 1, "换级测试准备装填失败。");
             SetResource(4); Count(1, 8);
         }
+        // 作用：按发送顺序核对库存事件的口径、等级与新数量；返回：无返回值。
         public void InventoryEvent(int index, int level, int count)
         {
+            // 先确认指定顺序的事件已捕获，再核对其弹药桶与更新后数量。
             Require(Changes.Count > index, "缺少库存变化事件 " + index);
             var e = Changes[index];
             Require(e.Caliber == Caliber.S && e.Level == level && e.Count == count,
                 $"库存事件实际 {e.Caliber}·{e.Level}={e.Count}，预期 S·{level}={count}。");
         }
+        // 作用：核对唯一缺弹事件中的槽位、实际预扣量和请求量；返回：无返回值。
         public void Shortage(int loaded, int wanted)
         {
+            // 先限制缺弹提示恰好一次，再核对固定测试槽位及实际预扣与请求数量。
             Require(Shortages.Count == 1, "应恰好发送一次 AmmoShortageEvent。");
             var e = Shortages[0];
             Require(e.SlotIndex == 4 && e.Loaded == loaded && e.Wanted == wanted,
                 $"缺弹事件实际 slot={e.SlotIndex}, loaded={e.Loaded}, wanted={e.Wanted}。");
         }
+        // 作用：注销监听、反初始化测试架构并销毁临时配置；返回：无返回值。
         public void Dispose()
         {
+            // 嵌套 finally 使前序清理抛错时仍尝试释放后续资源，构造失败也复用此路径。
             try
             {
                 mInventorySubscription?.UnRegister();
@@ -706,8 +783,10 @@ public static class StageThreeValidation
         }
     }
 
+    // 作用：读取指定 Resources 目录并检查全项目同类配置的空 ID 与重复 ID；返回：目录配置数组，读取未成功时保留空数组。
     private static T[] ReadCatalog<T>(Report report, string folder, Func<T, string> id) where T : ScriptableObject
     {
+        // 运行时目录与全项目资产各自检查；直接读取，不访问或刷新 ConfigTable 静态缓存。
         var configs = Array.Empty<T>();
         report.Check(typeof(T).Name + "：直接读取 Resources/" + folder, () =>
         {
@@ -729,8 +808,10 @@ public static class StageThreeValidation
         return configs;
     }
 
+    // 作用：检查 Resources 路径确为预制体且根节点带有所需组件；返回：只读加载的预制体资产，不创建实例。
     private static GameObject RequirePrefab<T>(string path) where T : Component
     {
+        // 从非空路径逐步验证加载结果、资产后缀与根组件，全程只读而不实例化。
         Require(!string.IsNullOrWhiteSpace(path), "Resources prefab 路径为空。");
         var prefab = Resources.Load<GameObject>(path);
         Require(prefab != null, "缺少 Resources/" + path + " prefab。");
@@ -739,20 +820,25 @@ public static class StageThreeValidation
         return prefab;
     }
 
+    // 作用：筛选并断言结果恰好唯一；返回：唯一匹配项，零项或多项时抛出异常。
     private static T Unique<T>(IEnumerable<T> values, Func<T, bool> predicate, string label)
     {
+        // 先收集全部匹配项并核对唯一性，再返回结果，防止静默选中重复配置。
         var matches = values.Where(predicate).ToArray();
         Require(matches.Length == 1, label + " 预期恰好 1 个，实际 " + matches.Length + "。");
         return matches[0];
     }
 
+    // 作用：按精确名称查找序列化字段并拒绝缺失字段；返回：已找到的 SerializedProperty。
     private static SerializedProperty Property(SerializedObject serialized, string name)
     {
+        // 按当前源码字段名精确查找，确认存在后才允许调用方读取或设置值。
         var property = serialized.FindProperty(name);
         Require(property != null, serialized.targetObject.GetType().Name + "." + name + " 字段不存在；请复核当前源码，未猜测替代字段。");
         return property;
     }
 
+    // 作用：只读检查磁盘 YAML 是否显式保存必需字段，并提示遗留字段；返回：无返回值。
     private static void InspectSerializedFields(Report report, string label, Func<Object> asset,
         string[] required, string[] obsolete)
     {
@@ -778,24 +864,35 @@ public static class StageThreeValidation
         });
     }
 
+    // 作用：断言实际浮点值有限且与预期误差不超过 0.001；返回：无返回值。
     private static void Near(float actual, float expected, string label)
     {
+        // 先排除非有限值，再按绝对误差核对预期，避免浮点舍入造成误报。
         Require(!float.IsNaN(actual) && !float.IsInfinity(actual) && Mathf.Abs(actual - expected) <= 0.001f,
             $"{label} 实际 {actual}，预期 {expected}。");
     }
 
+    // 作用：条件不成立时抛出带说明的断言异常；返回：无返回值。
     private static void Require(bool condition, string message)
     {
+        // 将失败条件转换为带业务说明的异常，供外层报告器归类记录。
         if (!condition) throw new InvalidOperationException(message);
     }
 
     private sealed class Report
     {
-        private readonly string mName;
-        private int mPassed, mFailed, mPending, mSkipped;
-        public Report(string name) { mName = name; }
+        private readonly string mName; // 本轮报告的检查类别名称。
+        private int mPassed, mFailed, mPending, mSkipped; // mPassed：通过数；mFailed：失败数；mPending：待装配或迁移数；mSkipped：未执行数。
+        // 作用：记录本轮报告名称，各项计数保持初始零值；返回：无返回值（构造函数）。
+        public Report(string name)
+        {
+            // 保存本轮检查类别供最终汇总标识，计数使用新实例的零初值。
+            mName = name;
+        }
+        // 作用：执行单项检查并按结果累计通过、失败或待处理数量；返回：无返回值。
         public void Check(string name, Action check, bool pendingOnFailure = false)
         {
+            // 装配或迁移缺项可记为待处理；异常在本项内吸收，不阻断其他检查。
             try
             {
                 check();
@@ -816,8 +913,10 @@ public static class StageThreeValidation
                 }
             }
         }
+        // 作用：隔离整个检查分区的异常，分区中断记为失败并继续后续分区；返回：无返回值。
         public void Section(string name, Action section)
         {
+            // 将分区级异常转为一次失败记录，避免单个分区中断整轮检查。
             try { section(); }
             catch (Exception exception)
             {
@@ -825,13 +924,17 @@ public static class StageThreeValidation
                 Debug.LogError("[阶段三][FAIL] " + name + " 检查中断：" + exception.GetBaseException().Message);
             }
         }
-        public void Note(string message) => Debug.Log("[阶段三][INFO] " + message);
+        // 作用：直接输出不影响计数的信息说明；返回：无返回值。
+        public void Note(string message) => Debug.Log("[阶段三][INFO] " + message); // 仅补充检查背景，不将说明文本计入任何结果类别。
+        // 作用：记录并提示一项未执行的检查范围；返回：无返回值。
         public void Skip(string message)
         {
+            // 先累计未执行项再发出警告，将验收空白与通过、失败结果明确区分。
             mSkipped++;
             Debug.LogWarning("[阶段三][SKIP/未执行] " + message);
         }
-        public void Finish() => Debug.Log($"[阶段三] {mName}：PASS {mPassed} / FAIL {mFailed} / 待装配或迁移 {mPending} / 未执行 {mSkipped}。仅本次逐项结果，不代表阶段三或端到端验收完成。");
+        // 作用：直接输出本轮分类计数与验收边界，不把逐项结果等同端到端通过；返回：无返回值。
+        public void Finish() => Debug.Log($"[阶段三] {mName}：PASS {mPassed} / FAIL {mFailed} / 待装配或迁移 {mPending} / 未执行 {mSkipped}。仅本次逐项结果，不代表阶段三或端到端验收完成。"); // 按四类计数汇总本轮结果，同时保留逐项检查的结论边界。
     }
 }
 #endif

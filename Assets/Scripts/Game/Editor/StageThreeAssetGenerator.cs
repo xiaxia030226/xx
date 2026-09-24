@@ -13,31 +13,34 @@ using Object = UnityEngine.Object;
 
 public static class StageThreeAssetGenerator
 {
-    private const string ResourcesRoot = "Assets/Resources/";
-    private const string Prefabs = "Prefabs/StageThree/";
-    private const string MapPath = Prefabs + "Stage1Environment";
-    private const string GoldNotice = "当前 GameDesign 仅规定金币必掉，未给出数量区间；暂设所有敌人金币 1–1，须确认后手调，不代表正式经济数值。";
-    private static int sCreated;
+    private const string ResourcesRoot = "Assets/Resources/"; // Unity Resources 资产根路径。
+    private const string Prefabs = "Prefabs/StageThree/"; // 阶段三预制体的 Resources 相对目录。
+    private const string MapPath = Prefabs + "Stage1Environment"; // 第一关环境预制体的 Resources 相对路径。
+    private const string GoldNotice = "当前 GameDesign 仅规定金币必掉，未给出数量区间；暂设所有敌人金币 1–1，须确认后手调，不代表正式经济数值。"; // 金币占位数值需人工确认的提示。
+    private static int sCreated; // 本轮生成中新建资产的累计数量。
 
     private sealed class EnemySpec
     {
-        public string Code, Id, Name;
-        public int HP, Damage, Level;
-        public float Speed, Interval, Range = 1f, Windup, Recovery = 0.35f, ProjectileSpeed = 12f;
-        public float ChargeDistance, ChargeSpeed, AreaRadius, TeleportDistance, Radius = 0.5f;
-        public EnemyAIType AI;
-        public EnemyCategory Category;
-        public PrimitiveType Shape = PrimitiveType.Sphere;
-        public Vector3 Size = new Vector3(1f, 0.8f, 1f);
+        public string Code, Id, Name; // Code：资源编号；Id：配置唯一标识；Name：显示名称。
+        public int HP, Damage, Level; // HP：生命上限；Damage：接触伤害；Level：攻击等级。
+        public float Speed, Interval, Range = 1f, Windup, Recovery = 0.35f, ProjectileSpeed = 12f; // Speed：移速；Interval：攻击间隔；Range：攻击范围；Windup：前摇；Recovery：恢复时间；ProjectileSpeed：弹速。
+        public float ChargeDistance, ChargeSpeed, AreaRadius, TeleportDistance, Radius = 0.5f; // ChargeDistance：冲锋距离；ChargeSpeed：冲锋速度；AreaRadius：范围技能半径；TeleportDistance：瞬移距离；Radius：碰撞半径。
+        public EnemyAIType AI; // 敌人的行为类型。
+        public EnemyCategory Category; // 普通、精英、机制或 Boss 分类。
+        public PrimitiveType Shape = PrimitiveType.Sphere; // 占位外观使用的基础几何体类型。
+        public Vector3 Size = new Vector3(1f, 0.8f, 1f); // 占位外观的局部缩放。
 
+        // 作用：记录敌人基础规格，其余参数使用字段默认值或对象初始化器补齐；返回：无返回值（构造函数）。
         public EnemySpec(string code, string id, string name, EnemyAIType ai, int hp, float speed,
             int damage, float interval, int level)
         {
+            // 将标识、行为与基础战斗参数配成一条规格，特殊技能参数留给初始化器补齐。
             Code = code; Id = id; Name = name; AI = ai; HP = hp; Speed = speed;
             Damage = damage; Interval = interval; Level = level;
         }
     }
 
+    // 作用：构造阶段三敌人占位资源的规格清单；返回：包含十二类敌人参数的新数组。
     private static EnemySpec[] EnemySpecs() => new[]
     {
         new EnemySpec("E01", EnemyConfigTable.SlimeGreenId, "绿史莱姆", EnemyAIType.ChaseMelee, 30, 2f, 10, 1f, 0),
@@ -64,8 +67,9 @@ public static class StageThreeAssetGenerator
         new EnemySpec("B01", EnemyConfigTable.SlimeKingId, "史莱姆王", EnemyAIType.SlimeKing, 650, 2f, 20, 5f, 1)
             { Category = EnemyCategory.Boss, Size = new Vector3(3f, 1.2f, 3f), Radius = 1.5f, Range = 10f, Windup = 1.2f,
                 Recovery = 1.5f, ChargeDistance = 12f, ChargeSpeed = 8f, AreaRadius = 3f }
-    };
+    }; // 逐类组合基础规格与技能、外观差异，供生成流程统一遍历。
 
+    // 作用：检查编辑器状态并确认用户意图后执行缺失资源生成；返回：无返回值。
     [MenuItem("Game/阶段三/生成缺失资源")]
     public static void Generate()
     {
@@ -74,13 +78,14 @@ public static class StageThreeAssetGenerator
             Debug.LogWarning("[阶段三] 请在停止播放且编译结束后生成。");
             return;
         }
+        // 菜单入口先确认；实际生成会写入新资产，但跳过已存在路径或 ID。
         if (!EditorUtility.DisplayDialog("阶段三：仅生成缺失资源",
             "创建盾/敌人/关卡配置、地图、预告、拾取和毒区占位资源。已有路径和同 ID 配置一律跳过，不修改旧玩家、枪、子弹或 UI。\n\n" + GoldNotice,
             "确认生成", "取消")) return;
         GenerateAssets();
     }
 
-    /// <summary>实际生成入口：无确认框，供菜单与 MCP 自动化共用；重复运行跳过已存在项。</summary>
+    // 作用：无确认框地生成并保存缺失资源，供菜单与自动化共用；返回：无返回值。
     public static void GenerateAssets()
     {
         if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling)
@@ -92,6 +97,7 @@ public static class StageThreeAssetGenerator
         var specs = EnemySpecs();
         try
         {
+            // 先扫描全项目 ID，再按依赖顺序创建材质、预制体和配置；不以新值覆盖旧资产。
             var enemyIds = ScanIds<EnemyConfig>("mId");
             var shieldIds = ScanIds<ShieldConfig>("mLevel");
             var stageIds = ScanIds<StageConfig>("mLevel");
@@ -137,6 +143,7 @@ public static class StageThreeAssetGenerator
         catch (Exception exception) { Debug.LogException(exception); }
         finally
         {
+            // 已创建的资产不回滚；始终列出旧资产需人工调整的字段，不调用全局 SaveAssets。
             PrintManualChanges(specs[0]);
             Debug.LogWarning("[阶段三] " + GoldNotice);
             Debug.Log($"[阶段三] 已新建 {sCreated} 项；每项创建/跳过路径见日志。未保存任何旧资产。请由用户执行 Unity 编译与 Play 验收。\n"
@@ -145,8 +152,10 @@ public static class StageThreeAssetGenerator
         }
     }
 
+    // 作用：扫描指定类型配置的序列化标识并报告重复或目录异常；返回：首次出现的 ID 到资产路径映射。
     private static Dictionary<string, string> ScanIds<T>(string field) where T : ScriptableObject
     {
+        // 按序列化字段读 ID，包含子资产；目录外同 ID 也阻止生成，避免静默制造重复。
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var guid in AssetDatabase.FindAssets("t:" + typeof(T).Name))
         {
@@ -165,16 +174,20 @@ public static class StageThreeAssetGenerator
         return result;
     }
 
+    // 作用：判断目标路径是否已占用以保护原有内容；返回：true 表示应跳过，false 表示没有资产、文件、目录或 meta 占用。
     private static bool SkipPath(string path)
     {
+        // 同时检查资源库和磁盘，未导入文件与孤立 meta 也不覆盖。
         if (AssetDatabase.LoadMainAssetAtPath(path) == null && !File.Exists(path) && !Directory.Exists(path)
             && !File.Exists(path + ".meta")) return false;
         Debug.Log("[阶段三] 跳过已有路径（含未导入文件/孤立 meta）：" + path);
         return true;
     }
 
+    // 作用：递归补齐 Unity 资产目录，创建失败则抛出异常；返回：无返回值。
     private static void EnsureFolder(string path)
     {
+        // 已有目录立即复用，缺失时递归补齐父目录再创建当前层。
         if (AssetDatabase.IsValidFolder(path)) return;
         var parent = Path.GetDirectoryName(path).Replace('\\', '/');
         EnsureFolder(parent);
@@ -182,9 +195,11 @@ public static class StageThreeAssetGenerator
             throw new IOException("无法创建资源目录：" + path);
     }
 
+    // 作用：跳过已有 ID 或路径后配置并持久化新的 ScriptableObject；返回：无返回值。
     private static void ConfigAsset<T>(string relative, string id, Dictionary<string, string> ids,
         Action<SerializedObject> configure) where T : ScriptableObject
     {
+        // ID 与路径双重防覆盖；配置完成才保存，未持久化的临时对象由 finally 销毁。
         if (ids.TryGetValue(id, out var existing))
         {
             Debug.Log($"[阶段三] 跳过已有 ID {typeof(T).Name}/{id}：{existing}");
@@ -206,8 +221,10 @@ public static class StageThreeAssetGenerator
         finally { if (!EditorUtility.IsPersistent(config)) Object.DestroyImmediate(config); }
     }
 
+    // 作用：复用已有材质或按渲染管线创建并保存占位材质；返回：有效的材质资产，已有路径不可用时抛出异常。
     private static Material MaterialAsset(string name, Color color, bool vertexColor = false)
     {
+        // 已占用路径只读取不覆盖；新建时区分顶点色与当前渲染管线的着色器。
         var path = ResourcesRoot + "Materials/StageThree/" + name + ".mat";
         if (SkipPath(path)) return AssetDatabase.LoadAssetAtPath<Material>(path)
             ?? throw new InvalidOperationException("已有路径不是可用材质，保留原文件：" + path);
@@ -223,8 +240,10 @@ public static class StageThreeAssetGenerator
         return material;
     }
 
+    // 作用：复用已有预制体或在预览场景中构建并保存新预制体；返回：预制体资产，已有路径不可用时抛出异常。
     private static GameObject PrefabAsset(string resourcePath, Action<GameObject> build)
     {
+        // 隔离临时根节点，保存后或异常时都销毁节点并关闭预览场景，不改当前场景。
         var path = ResourcesRoot + resourcePath + ".prefab";
         if (SkipPath(path)) return AssetDatabase.LoadAssetAtPath<GameObject>(path)
             ?? throw new InvalidOperationException("已有路径不是可用 prefab，保留原文件：" + path);
@@ -243,10 +262,17 @@ public static class StageThreeAssetGenerator
         finally { Object.DestroyImmediate(root); EditorSceneManager.ClosePreviewScene(scene); }
     }
 
-    private static void Created(string path) { sCreated++; Debug.Log("[阶段三] 新建：" + path); }
+    // 作用：累计本轮新建资产数并输出路径；返回：无返回值。
+    private static void Created(string path)
+    {
+        // 先累计已创建数量，再记录路径，让最终总数能对应逐项日志。
+        sCreated++; Debug.Log("[阶段三] 新建：" + path);
+    }
 
+    // 作用：按值类型写入指定序列化字段，字段缺失或类型不支持则报错；返回：无返回值。
     private static void Set(SerializedObject so, string name, object value)
     {
+        // 明确按字段名定位，不猜测替代字段；这里只赋值，统一由调用方应用修改。
         var property = so.FindProperty(name) ?? throw new MissingFieldException(so.targetObject.GetType().Name, name);
         if (value is string text) property.stringValue = text;
         else if (value is int integer) property.intValue = integer;
@@ -256,15 +282,19 @@ public static class StageThreeAssetGenerator
         else throw new ArgumentException("不支持的序列化值：" + name);
     }
 
+    // 作用：写入对象的单个序列化字段并立即应用，不记录 Undo；返回：无返回值。
     private static void Assign(Object target, string field, object value)
     {
+        // 通过统一的类型分派写入序列化字段，再立即应用到当前装配对象。
         var so = new SerializedObject(target);
         Set(so, field, value);
         so.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // 作用：将敌人规格与分级掉落默认值写入待应用的序列化配置；返回：无返回值。
     private static void ConfigureEnemy(SerializedObject so, EnemySpec e)
     {
+        // Boss 与精英使用保底掉落，其余按普通概率；金币区间仍为待确认占位。
         var boss = e.Category == EnemyCategory.Boss;
         var guaranteed = boss || e.Category == EnemyCategory.Elite;
         Set(so, "mId", e.Id); Set(so, "mName", e.Name); Set(so, "mMaxHP", e.HP); Set(so, "mMoveSpeed", e.Speed);
@@ -282,8 +312,10 @@ public static class StageThreeAssetGenerator
         Set(so, "mPrefabPath", Prefabs + e.Code);
     }
 
+    // 作用：写入第一关环境、初始两种枪池、结算奖励及六波生成组；返回：无返回值。
     private static void ConfigureStage(SerializedObject so)
     {
+        // 此生成器保留初始两枪配置，不自动迁移后续阶段需要的三枪资源合同。
         Set(so, "mLevel", 1); Set(so, "mEnvironmentPath", MapPath); Set(so, "mClearBonus", 500);
         var weapons = so.FindProperty("mWeaponIds");
         weapons.arraySize = 2;
@@ -316,9 +348,11 @@ public static class StageThreeAssetGenerator
         }
     }
 
+    // 作用：创建并挂载指定位置、缩放与材质的占位几何体，按需保留碰撞体；返回：新建的 GameObject。
     private static GameObject Primitive(Transform parent, string name, PrimitiveType shape, Vector3 position,
         Vector3 size, Material material, bool solid = false)
     {
+        // 先统一设置层级、外观与尺寸，再按实体需求移除纯视觉几何体的碰撞体。
         var go = GameObject.CreatePrimitive(shape);
         go.name = name;
         go.transform.SetParent(parent, false);
@@ -329,8 +363,10 @@ public static class StageThreeAssetGenerator
         return go;
     }
 
+    // 作用：创建朝向固定俯视视角、使用指定字体的世界空间标签；返回：新建的 TMP 文本组件。
     private static TMP_Text Label(Transform parent, TMP_FontAsset font, string text, float height)
     {
+        // 按给定高度抬升标签并对齐俯视角，再配置居中文字且关闭射线拦截。
         var go = new GameObject("Label", typeof(RectTransform));
         go.transform.SetParent(parent, false);
         go.transform.localPosition = Vector3.up * height;
@@ -344,8 +380,10 @@ public static class StageThreeAssetGenerator
         return label;
     }
 
+    // 作用：装配敌人技能预告的线条数组与护盾文字引用；返回：无返回值。
     private static void BuildTelegraph(GameObject root, Material material, TMP_FontAsset font)
     {
+        // 五条线依次供攻击、三条支援连线及盾环使用，初始关闭，交由运行时绘制。
         var so = new SerializedObject(root.AddComponent<EnemyTelegraph>());
         var lines = so.FindProperty("mLines");
         lines.arraySize = 5;
@@ -363,8 +401,10 @@ public static class StageThreeAssetGenerator
         so.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // 作用：装配敌人的触发体、运动学刚体、占位外观和预告引用；返回：无返回值。
     private static void BuildEnemy(GameObject root, EnemySpec e, Material material, GameObject telegraph)
     {
+        // 外观高度用于抬升标签；复用预告必须有组件，树精额外登记为动态障碍。
         var body = root.AddComponent<SphereCollider>();
         body.radius = e.Radius; body.isTrigger = true;
         var rigidbody = root.AddComponent<Rigidbody>();
@@ -382,8 +422,10 @@ public static class StageThreeAssetGenerator
         if (e.AI == EnemyAIType.Slam) Assign(root.AddComponent<BattleObstacle>(), "mDynamic", true);
     }
 
+    // 作用：生成缺失的金币、弹包、护盾与武器拾取占位材质和预制体；返回：无返回值。
     private static void BuildPickups(TMP_FontAsset font)
     {
+        // 同一索引对应名称、组件与颜色，护盾和武器额外挂载标签；保存由资产辅助方法完成。
         var names = new[] { "GoldPickup", "AmmoPackPickup", "ShieldPickup", "WeaponPickup" };
         var types = new[] { typeof(GoldPickup), typeof(AmmoPackPickup), typeof(ShieldPickup), typeof(WeaponPickup) };
         var colors = new[] { Color.yellow, new Color(1f, 0.55f, 0.15f), Color.cyan, new Color(0.8f, 0.4f, 1f) };
@@ -401,8 +443,10 @@ public static class StageThreeAssetGenerator
         }
     }
 
+    // 作用：装配第一关地面、环道、可破坏岩石、边界和四个入口引用；返回：无返回值。
     private static void BuildMap(GameObject root, Material ground, Material clearing, Material rock, Material trail, TMP_FontAsset font)
     {
+        // 用对称几何布局构造占位地图，视觉地面不保留碰撞体，岩石与边界登记障碍。
         var environment = root.AddComponent<StageEnvironment>();
         root.AddComponent<BattleNavigation>();
         Assign(environment, "mHalfSize", 45f);
@@ -445,8 +489,10 @@ public static class StageThreeAssetGenerator
         so.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // 作用：用临时配置打印旧 E01 的目标字段及枪械、子弹人工装配提示；返回：无返回值。
     private static void PrintManualChanges(EnemySpec e01)
     {
+        // 只配置新建内存对象来枚举目标值，finally 销毁；不会保存或改写已有 E01 资产。
         var temp = ScriptableObject.CreateInstance<EnemyConfig>();
         try
         {

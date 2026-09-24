@@ -3,8 +3,8 @@ using UnityEngine;
 /// <summary>武器当前是否可用，或正在换弹装填。</summary>
 public enum WeaponState
 {
-    Ready,
-    Reloading
+    Ready, // 就绪状态，仍需检查耐久、冷却和弹量才能攻击。
+    Reloading // 装填计时中，暂时禁止攻击。
 }
 
 /// <summary>
@@ -14,43 +14,34 @@ public enum WeaponState
 /// </summary>
 public abstract class WeaponBase
 {
-    // DurabilityWarningRatio：耐久低于该比例时进入警示状态（HUD 变色提示）。
-    public const float DurabilityWarningRatio = 0.2f;
+    public const float DurabilityWarningRatio = 0.2f; // 未报废武器触发低耐久警示的剩余比例上限。
 
-    // mAttackCooldown：距下次可射击的剩余秒数。
-    private float mAttackCooldown;
+    private float mAttackCooldown; // 距离允许下次攻击的剩余冷却秒数。
 
-    public string Id { get; }
-    public string Name { get; }
+    public string Id { get; } // 武器配置标识。
+    public string Name { get; } // 武器显示名称。
 
-    // ResourceMax / Resource：弹夹容量与当前弹量（每发消耗 1）。
-    public float ResourceMax { get; }
-    public float Resource { get; protected set; }
+    public float ResourceMax { get; } // 弹夹容量上限。
+    public float Resource { get; protected set; } // 当前已装弹量，每次有效攻击由基类扣除一发。
 
-    public float AttackInterval { get; }
+    public float AttackInterval { get; } // 相邻两次攻击之间的最短秒数。
 
-    // Damage：武器基础伤害，命中伤害 = 基础 × 子弹等级倍率（× 肉弹对无盾加成）。
-    public float Damage { get; }
+    public float Damage { get; } // 武器基础伤害，子类发射时再乘子弹等级倍率。
 
-    // DurabilityMax / Durability：耐久上限与当前值。每发磨损 1 × 子弹等级磨损系数，归零报废。
-    public float DurabilityMax { get; }
-    public float Durability { get; private set; }
+    public float DurabilityMax { get; } // 初始耐久及耐久上限。
+    public float Durability { get; private set; } // 当前耐久，按射击磨损降低，归零报废。
 
-    public WeaponState State { get; protected set; } = WeaponState.Ready;
+    public WeaponState State { get; protected set; } = WeaponState.Ready; // 就绪或装填状态，不代替其他攻击门控。
 
-    // IsAutomatic：true 表示长按连发（机枪），false 表示点击单发（手枪）。
-    // Player 读取它决定用 IsPressed 还是 WasPressedThisFrame 驱动攻击。
-    public bool IsAutomatic { get; }
+    public bool IsAutomatic { get; } // true 由玩家长按连发，false 由单次按下触发射击。
 
-    // SlotIndex：武器所在槽位下标，由 WeaponSystem 装配时写入，用于事件载荷。
-    public int SlotIndex { get; set; } = -1;
+    public int SlotIndex { get; set; } = -1; // 武器栏槽位下标，由 WeaponSystem 写入，-1 表示尚未装配。
 
-    // IsBroken：耐久归零即报废；WeaponSystem 检测后置空槽位，不自动切枪。
-    public bool IsBroken => Durability <= 0f;
+    public bool IsBroken => Durability <= 0f; // 耐久归零时为 true，系统腾空此槽但不自动切枪。
 
-    // DurabilityWarning：耐久剩余 ≤20% 且未报废时进入警示状态。
-    public bool DurabilityWarning => !IsBroken && Durability <= DurabilityMax * DurabilityWarningRatio;
+    public bool DurabilityWarning => !IsBroken && Durability <= DurabilityMax * DurabilityWarningRatio; // 未报废且耐久不超过警示比例时为 true。
 
+    // 作用：保存武器配置并以满耐久、空弹夹创建基础状态；返回：无返回值（构造函数）。
     protected WeaponBase(string id, string name, int magazine, float attackInterval, float damage,
         float durabilityMax, bool isAutomatic)
     {
@@ -67,39 +58,34 @@ public abstract class WeaponBase
         IsAutomatic = isAutomatic;
     }
 
-    // 一次攻击必须同时满足：未报废、武器就绪、攻击间隔结束、弹夹有弹。
-    public bool CanAttack => !IsBroken && State == WeaponState.Ready && mAttackCooldown <= 0f && Resource >= 1f;
+    public bool CanAttack => !IsBroken && State == WeaponState.Ready && mAttackCooldown <= 0f && Resource >= 1f; // 未报废、就绪、冷却结束且至少有一发时为 true。
 
-    /// <summary>
-    /// 通用攻击入口：先校验状态并扣弹，再把具体命中逻辑交给子类 DoAttack。
-    /// 打空后的自动换弹由子类在 DoAttack 末尾触发。
-    /// </summary>
+    // 作用：校验攻击条件，统一扣弹和设置冷却后委托子类攻击；返回：true 表示已执行攻击，false 表示条件不满足或持有者为空。
     public bool TryAttack(Transform owner)
     {
         if (!CanAttack || owner == null) return false;
 
+        // 先扣总弹量再调用子类，子类只能更新来源份额，不能重复扣 Resource。
         Resource = Mathf.Max(0f, Resource - 1f);
         mAttackCooldown = AttackInterval;
         DoAttack(owner);
         return true;
     }
 
-    /// <summary>
-    /// 每帧推进攻击冷却。virtual：子类 override 追加换弹计时，重写时必须调用 base.Tick。
-    /// </summary>
+    // 作用：推进攻击冷却，供子类在调用 base.Tick 后追加装填计时；返回：无返回值。
     public virtual void Tick(float deltaTime)
     {
+        // 冷却钳制到零，避免空闲时间累积成额外攻击机会。
         mAttackCooldown = Mathf.Max(0f, mAttackCooldown - deltaTime);
     }
 
-    /// <summary>
-    /// 磨损耐久：每发子弹由子类按等级磨损系数调用一次。
-    /// </summary>
+    // 作用：按传入磨损量扣减耐久并将下限限制为零；返回：无返回值。
     public void Wear(float amount)
     {
+        // 扣减后钳制到零，让报废判断使用稳定下限而不是负耐久。
         Durability = Mathf.Max(0f, Durability - amount);
     }
 
-    // 子类只实现武器特有的命中方式，不重复处理冷却与弹量消耗。
+    // 作用：由子类执行具体攻击及后续装填逻辑，不重复扣总弹量和设置冷却；返回：无返回值。
     protected abstract void DoAttack(Transform owner);
 }

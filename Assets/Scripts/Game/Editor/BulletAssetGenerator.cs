@@ -9,18 +9,17 @@ using UnityEngine;
 /// </summary>
 public static class BulletAssetGenerator
 {
-    // OutputFolder：资产输出目录（Unity 路径，相对工程根）。
-    private const string OutputFolder = "Assets/Resources/Configs/Bullets";
+    private const string OutputFolder = "Assets/Resources/Configs/Bullets"; // 配置资产输出目录，相对 Unity 工程根目录。
 
-    // BulletPrefabPath：子弹预制体在 Resources 下的相对路径（全部口径共用）。
-    private const string BulletPrefabPath = "Prefabs/Bullet";
+    private const string BulletPrefabPath = "Prefabs/Bullet"; // 所有口径共用的子弹预制体 Resources 相对路径。
 
-    // BulletSpeed：子弹飞行速度（米/秒），与旧 NormalBullet 保持一致。
-    private const float BulletSpeed = 30f;
+    private const float BulletSpeed = 30f; // 子弹速度（米/秒），与旧 NormalBullet 保持一致。
 
+    // 作用：生成缺失的各口径、各穿甲等级子弹配置并保存资源；返回：无返回值。
     [MenuItem("Game/生成子弹配置资产（18个）")]
     public static void Generate()
     {
+        // 先准备输出目录；已有配置按路径跳过，不覆盖手工调整。
         if (!Directory.Exists(OutputFolder))
         {
             Directory.CreateDirectory(OutputFolder);
@@ -55,6 +54,7 @@ public static class BulletAssetGenerator
             }
         }
 
+        // CreateAsset 已创建磁盘资产；这里还会全局保存脏资产并刷新资源库，并非只读预检。
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         Debug.Log($"[BulletAssetGenerator] 完成：新建 {created} 个子弹配置（已存在则跳过），目录 {OutputFolder}");

@@ -1,39 +1,28 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// 子弹配置查询表。配置数据以 ScriptableObject 资产的形式存放在
-/// Resources/Configs/Bullets/ 文件夹下（由 Editor 菜单一键生成 18 个：3 口径 × 6 等级），
-/// 首次访问时一次性加载填充。
-/// 新增口径或调整等级范围：改生成器后重新生成即可，代码零改动。
-/// </summary>
+/// <summary>按子弹标识查询配置，首次访问时从 Resources/Configs/Bullets 加载并缓存。</summary>
 public static class BulletConfigTable
 {
-    // ConfigsFolder：子弹配置资产在 Resources 下的相对文件夹路径（独立于武器配置目录）。
-    private const string ConfigsFolder = "Configs/Bullets";
+    private const string ConfigsFolder = "Configs/Bullets"; // 子弹配置在 Resources 下的相对目录。
 
-    // sConfigs：懒加载的配置字典（子弹 id → 配置资产），首次访问时从 Resources 加载填充。
-    private static Dictionary<string, BulletConfig> sConfigs;
+    private static Dictionary<string, BulletConfig> sConfigs; // 子弹标识到配置资产的缓存。
 
-    // Configs：配置字典访问入口；sConfigs 为 null 时触发一次性加载。
-    private static Dictionary<string, BulletConfig> Configs => sConfigs ??= LoadAll();
+    private static Dictionary<string, BulletConfig> Configs => sConfigs ??= LoadAll(); // 缓存为空时加载，后续查询复用同一字典。
 
-    // AllIds：配置表中全部子弹 id 的只读集合，供武器系统遍历注册子弹对象池。
-    public static IReadOnlyCollection<string> AllIds => Configs.Keys;
+    public static IReadOnlyCollection<string> AllIds => Configs.Keys; // 已加载子弹配置的全部标识。
 
-    /// <summary>
-    /// 安全查询配置：找不到时返回 false，适合调用方自行处理缺失情况。
-    /// </summary>
+    // 作用：尝试按标识查询子弹配置；返回：找到为 true，否则为 false；out config 为找到的配置或 null。
     public static bool TryGet(string id, out BulletConfig config)
     {
+        // 直接使用字典查询，让调用方自行处理不存在的标识。
         return Configs.TryGetValue(id, out config);
     }
 
-    /// <summary>
-    /// 必须取得配置：id 错误时直接抛出异常，便于尽早发现配置问题。
-    /// </summary>
+    // 作用：取得必须存在的子弹配置；返回：对应配置，标识缺失时抛出 KeyNotFoundException。
     public static BulletConfig Get(string id)
     {
+        // 无配置时立即暴露错误，不替换为其他口径或等级。
         if (!Configs.TryGetValue(id, out var config))
         {
             throw new KeyNotFoundException($"未找到子弹配置：{id}");
@@ -42,16 +31,14 @@ public static class BulletConfigTable
         return config;
     }
 
-    /// <summary>
-    /// 从 Resources/Configs/Bullets 加载全部子弹配置资产并填入字典。
-    /// </summary>
+    // 作用：加载全部子弹配置并建立标识索引；返回：按唯一标识整理的配置字典。
     private static Dictionary<string, BulletConfig> LoadAll()
     {
         var configs = new Dictionary<string, BulletConfig>();
 
         foreach (var config in Resources.LoadAll<BulletConfig>(ConfigsFolder))
         {
-            // id 是字典的 key，重复时后加载的资产会覆盖先加载的，数据就乱了，因此直接报错提示。
+            // 重复标识只记录错误并跳过，保留首个加载资产而非覆盖。
             if (configs.ContainsKey(config.Id))
             {
                 Debug.LogError($"[BulletConfig] 子弹 id 重复：{config.Id}（资产 {config.name}）");

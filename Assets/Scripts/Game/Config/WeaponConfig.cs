@@ -1,57 +1,44 @@
 using UnityEngine;
 
-/// <summary>
-/// 单把武器的静态配置（ScriptableObject 资产）。
-/// 创建方式：Project 窗口右键 → Create → Game → 武器配置，
-/// 资产统一放在 Resources/Configs/Weapons/ 文件夹下，运行时由 WeaponConfigTable 加载。
-/// 新增武器只需新建一个资产并填好字段，代码零改动。
-/// </summary>
+/// <summary>武器静态配置资产，由 WeaponConfigTable 从 Resources/Configs/Weapons 加载。</summary>
 [CreateAssetMenu(fileName = "NewWeapon", menuName = "Game/武器配置", order = 0)]
 public class WeaponConfig : ScriptableObject
 {
     [Header("身份")]
 
-    // mId：武器唯一标识，WeaponSystem 按它从配置表取武器。
-    [SerializeField] private string mId;
+    [SerializeField] private string mId; // 武器唯一标识，用于配置查询及拾取。
 
-    // mName：显示名，用于 HUD 武器格子上的文字。
-    [SerializeField] private string mName;
+    [SerializeField] private string mName; // 武器显示名，供 HUD 等界面使用。
 
     [Header("弹药")]
 
-    // mCaliber：该武器装填的子弹口径（S/AR/L），决定消耗哪种子弹库存与使用哪个子弹池。
-    [SerializeField] private Caliber mCaliber;
+    [SerializeField] private Caliber mCaliber; // 装填口径，决定库存分类和子弹对象池。
 
-    // mMagazine：弹夹容量，打空后进入换弹。
-    [SerializeField] private int mMagazine;
+    [SerializeField] private int mMagazine; // 弹夹最大弹数。
 
-    // mReloadTime：换弹时间（秒），换弹期间该武器无法射击，切后台仍继续计时。
-    [SerializeField] private float mReloadTime;
+    [SerializeField] private float mReloadTime; // 换弹耗时秒数，换弹期间不能射击。
 
     [Header("耐久")]
 
-    // mDurabilityMax：耐久上限。每发子弹磨损 1 × 子弹等级磨损系数，归零报废腾格。
-    [SerializeField] private float mDurabilityMax;
+    [SerializeField] private float mDurabilityMax; // 初始耐久上限，每发按弹药等级磨损，耗尽后报废。
 
     [Header("伤害与射速")]
 
-    // mDamage：武器基础伤害，命中伤害 = 基础伤害 × 子弹等级倍率（× 肉弹对无盾加成）。
-    [SerializeField] private float mDamage;
+    [SerializeField] private float mDamage; // 武器基础伤害，发射时乘弹药等级倍率。
 
-    [SerializeField, Min(0f)] private float mRoundsPerMinute;
-    [SerializeField, Min(0.01f)] private float mSemiAutoInterval = 0.25f;
+    [SerializeField, Min(0f)] private float mRoundsPerMinute; // 自动武器每分钟射速，发射间隔取 60 除以此值。
+    [SerializeField, Min(0.01f)] private float mSemiAutoInterval = 0.25f; // 非自动武器的最短射击间隔秒数。
 
-    // mIsAutomatic：true 表示长按连发（机枪），false 表示点击单发（手枪）。
-    [SerializeField] private bool mIsAutomatic;
+    [SerializeField] private bool mIsAutomatic; // true 使用长按连发与每分钟射速；false 使用单发间隔。
 
-    public string Id => mId;
-    public string Name => mName;
-    public Caliber Caliber => mCaliber;
-    public int Magazine => mMagazine;
-    public float ReloadTime => mReloadTime;
-    public float DurabilityMax => mDurabilityMax;
-    public float Damage => mDamage;
-    public float RoundsPerMinute => mRoundsPerMinute;
-    public float SemiAutoInterval => mSemiAutoInterval;
-    public bool IsAutomatic => mIsAutomatic;
+    public string Id => mId; // 武器唯一标识。
+    public string Name => mName; // 武器显示名。
+    public Caliber Caliber => mCaliber; // 武器装填口径。
+    public int Magazine => mMagazine; // 弹夹容量。
+    public float ReloadTime => mReloadTime; // 换弹时间秒数。
+    public float DurabilityMax => mDurabilityMax; // 最大耐久。
+    public float Damage => mDamage; // 基础伤害。
+    public float RoundsPerMinute => mRoundsPerMinute; // 自动武器每分钟发数。
+    public float SemiAutoInterval => mSemiAutoInterval; // 非自动武器射击间隔秒数。
+    public bool IsAutomatic => mIsAutomatic; // 是否使用自动射击模式。
 }

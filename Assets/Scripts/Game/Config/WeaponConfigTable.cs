@@ -1,44 +1,33 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// 武器配置查询表。配置数据以 ScriptableObject 资产的形式存放在
-/// Resources/Configs/Weapons/ 文件夹下，首次访问时一次性加载填充。
-/// 新增武器：在该文件夹右键 Create → Game → 武器配置，填好字段即可，代码零改动。
-/// </summary>
+/// <summary>按武器标识查询静态配置，首次访问时加载 Resources/Configs/Weapons 中的资产。</summary>
 public static class WeaponConfigTable
 {
-    // PistolId：手枪的 id 约定常量，WeaponSystem 用它装配第一格武器。
-    public const string PistolId = "pistol";
+    public const string PistolId = "pistol"; // 手枪配置标识，用于初始装备及掉落兜底。
 
-    public const string MachineGunId = "machinegun";
-    public const string SmgId = "smg";
+    public const string MachineGunId = "machinegun"; // 机枪配置标识。
+    public const string SmgId = "smg"; // 冲锋枪配置标识。
 
-    // ConfigsFolder：武器配置资产在 Resources 下的相对文件夹路径（子弹配置在 Configs/Bullets）。
-    private const string ConfigsFolder = "Configs/Weapons";
+    private const string ConfigsFolder = "Configs/Weapons"; // 武器配置在 Resources 下的相对目录。
 
-    // sConfigs：懒加载的配置字典（武器 id → 配置资产），首次访问时从 Resources 加载填充。
-    private static Dictionary<string, WeaponConfig> sConfigs;
+    private static Dictionary<string, WeaponConfig> sConfigs; // 武器标识到配置资产的缓存。
 
-    // Configs：配置字典访问入口；sConfigs 为 null 时触发一次性加载。
-    private static Dictionary<string, WeaponConfig> Configs => sConfigs ??= LoadAll();
+    private static Dictionary<string, WeaponConfig> Configs => sConfigs ??= LoadAll(); // 空缓存触发加载，后续查询不重复读资源。
 
-    // AllIds：配置表中全部武器 id 的只读集合。
-    public static IReadOnlyCollection<string> AllIds => Configs.Keys;
+    public static IReadOnlyCollection<string> AllIds => Configs.Keys; // 表内全部武器配置标识。
 
-    /// <summary>
-    /// 安全查询配置：找不到时返回 false，适合调用方自行处理缺失情况。
-    /// </summary>
+    // 作用：尝试按标识查询武器配置；返回：找到为 true，否则为 false；out config 为对应资产或 null。
     public static bool TryGet(string id, out WeaponConfig config)
     {
+        // 让调用方根据布尔结果决定如何处理缺失配置。
         return Configs.TryGetValue(id, out config);
     }
 
-    /// <summary>
-    /// 必须取得配置：id 错误时直接抛出异常，便于尽早发现配置问题。
-    /// </summary>
+    // 作用：取得必须存在的武器配置；返回：对应资产，标识缺失时抛出 KeyNotFoundException。
     public static WeaponConfig Get(string id)
     {
+        // 无配置时直接报出标识，不静默改用另一把武器。
         if (!Configs.TryGetValue(id, out var config))
         {
             throw new KeyNotFoundException($"未找到武器配置：{id}");
@@ -47,16 +36,14 @@ public static class WeaponConfigTable
         return config;
     }
 
-    /// <summary>
-    /// 从 Resources/Configs/Weapons 加载全部武器配置资产并填入字典。
-    /// </summary>
+    // 作用：加载所有武器配置并建立标识索引；返回：按唯一标识整理的配置字典。
     private static Dictionary<string, WeaponConfig> LoadAll()
     {
         var configs = new Dictionary<string, WeaponConfig>();
 
         foreach (var config in Resources.LoadAll<WeaponConfig>(ConfigsFolder))
         {
-            // id 是字典的 key，重复时后加载的资产会覆盖先加载的，数据就乱了，因此直接报错提示。
+            // 后遇到的重复标识只报错并跳过，保留第一次登记的资产。
             if (configs.ContainsKey(config.Id))
             {
                 Debug.LogError($"[WeaponConfig] 武器 id 重复：{config.Id}（资产 {config.name}）");

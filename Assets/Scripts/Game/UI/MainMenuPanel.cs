@@ -17,10 +17,13 @@ namespace Game.UI
     /// </summary>
     public partial class MainMenuPanel : UIPanel, IController
     {
-        public IArchitecture GetArchitecture() => GameArchitecture.Interface;
+        // 作用：提供主菜单访问模型所用的架构；返回：游戏架构接口。
+        public IArchitecture GetArchitecture() => GameArchitecture.Interface; // 直接返回共享架构入口。
 
+        // 作用：初始化面板数据并绑定开始和退出按钮；返回：无返回值。
         protected override void OnInit(IUIData uiData = null)
         {
+            // 使用传入的面板数据，类型不匹配或为空时使用默认数据。
             mData = uiData as MainMenuPanelData ?? new MainMenuPanelData();
 
             // 开始游戏：进入选关状态并打开选关面板，主菜单面板随之关闭。
@@ -35,20 +38,28 @@ namespace Game.UI
             QuitButton.onClick.AddListener(Application.Quit);
         }
 
+        // 作用：接收主菜单打开回调；返回：无返回值。
         protected override void OnOpen(IUIData uiData = null)
         {
+            // 主菜单没有每次打开时需要刷新的动态数据，保留空回调。
         }
 
+        // 作用：接收主菜单显示回调；返回：无返回值。
         protected override void OnShow()
         {
+            // 按钮已在初始化时绑定，显示时无需重复处理。
         }
 
+        // 作用：接收主菜单隐藏回调；返回：无返回值。
         protected override void OnHide()
         {
+            // 面板没有需在隐藏时暂停的自有流程。
         }
 
+        // 作用：接收主菜单关闭回调；返回：无返回值。
         protected override void OnClose()
         {
+            // 本面板未持有需在此释放的额外资源。
         }
     }
 }

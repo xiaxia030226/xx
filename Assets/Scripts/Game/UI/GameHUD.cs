@@ -14,66 +14,55 @@ namespace Game.UI
     /// <summary>
     /// 游戏内 HUD：血条、护盾条（等级/容量/破盾反馈）、武器格子条（弹量/等级/耐久/换弹置灰）、
     /// 波次倒计时与预告、掉落倍率、本局金币、子弹库存与缺弹提示、安全拾取结算按钮。
-    /// 波次倒计时与预告走 Update 轮询（系统侧只读属性，不推事件）；其余均事件/订阅驱动。
+    /// 波次与槽位弹量由 Update 轮询并缓存文本状态，提示计时也在 Update 检查；其余显示通过事件或模型订阅刷新。
     /// 控件引用在 GameHUD.Designer.cs 中声明，由 prefab 上的 Bind 组件生成代码赋值，勿在此重复声明。
     /// </summary>
     public partial class GameHUD : UIPanel, IController
     {
-        // ShortageShowSeconds：缺弹提示的展示时长（秒），超时自动隐藏。
-        private const float ShortageShowSeconds = 2f;
+        private const float ShortageShowSeconds = 2f; // 缺弹提示持续时长，单位为秒。
 
-        // ShieldBreakFlashSeconds：破盾后护盾条闪烁"破盾！"提示的时长（秒）。
-        private const float ShieldBreakFlashSeconds = 0.6f;
+        private const float ShieldBreakFlashSeconds = 0.6f; // 破盾提示持续时长，单位为秒。
 
         /// <summary>
         /// 槽位弹量显示要素缓存：任一要素变化才重建文本，避免 Update 每帧字符串分配。
         /// </summary>
         private struct SlotAmmoState
         {
-            public int Resource;
-            public int LoadedLevel;
-            public int NextLevel;
-            public bool Reloading;
+            public int Resource; // 上次显示的向上取整弹量，-1 用于强制下次刷新。
+            public int LoadedLevel; // 上次显示的已装填子弹等级。
+            public int NextLevel; // 上次显示的下次装填子弹等级。
+            public bool Reloading; // 上次显示的换弹状态，true 表示正在换弹。
         }
 
-        private float mCurrentHp;
-        private float mCurrentMaxHp;
+        private float mCurrentHp; // 血量订阅回调缓存的当前生命值。
+        private float mCurrentMaxHp; // 血量上限订阅回调缓存的最大生命值。
 
-        // mSlots：全部武器格子数组，按槽位下标访问（预制体提供 Slot1~Slot9 共九格，与武器槽上限一致）。
-        private WeaponBarSlot[] mSlots;
+        private WeaponBarSlot[] mSlots; // Designer 提供的九个武器格子，按槽位下标访问。
 
-        // mEnemySpawnSystem / mWeaponSystem：系统缓存，Update 轮询波次与武器状态用，OnInit 取一次。
-        private IEnemySpawnSystem mEnemySpawnSystem;
-        private IWeaponSystem mWeaponSystem;
+        private IEnemySpawnSystem mEnemySpawnSystem; // 刷怪系统缓存，供每帧读取波次倒计时与预告。
+        private IWeaponSystem mWeaponSystem; // 武器系统缓存，供读取当前槽位与各武器状态。
 
-        // mBulletInventory：子弹库存 Model 缓存，刷新库存文本用。
-        private IBulletInventoryModel mBulletInventory;
+        private IBulletInventoryModel mBulletInventory; // 子弹库存模型缓存，供刷新各口径和等级的库存文本。
 
-        // mSlotAmmoCache：各槽上次显示的弹量状态，与当前值比对决定是否刷新格子文本。
-        private SlotAmmoState[] mSlotAmmoCache;
+        private SlotAmmoState[] mSlotAmmoCache; // 各槽上次显示状态，用于跳过未变化的文本与遮罩刷新。
 
-        // mShowingFinalWave：是否正显示"最终波"文案（无下一波时只切换一次，避免每帧重复赋值）。
-        private bool mShowingFinalWave;
+        private bool mShowingFinalWave; // true 表示已处理无后续波次文案，安全拾取阶段也置 true 以防被最终波文案覆盖。
 
-        // mLastCountdownSecond：上次显示的倒计时整秒，整秒变化才刷新文本。
-        private int mLastCountdownSecond = -1;
+        private int mLastCountdownSecond = -1; // 上次显示的倒计时整秒，-1 表示尚未显示。
 
-        // mLastPreviewWave：上次生成预告文本的波次号，波次切换时才重建预告串。
-        private int mLastPreviewWave = -1;
+        private int mLastPreviewWave = -1; // 上次生成预告的波次号，-1 表示尚未生成。
 
-        // mShortageHideTime：缺弹提示的隐藏时刻（Time.time）；<=0 表示当前没有提示在显示。
-        private float mShortageHideTime = -1f;
+        private float mShortageHideTime = -1f; // 缺弹提示的 Time.time 隐藏时刻，-1 表示未安排隐藏。
 
-        // mShieldBreakUntil：破盾闪烁的截止时刻（Time.time）；<=0 表示当前没有破盾提示。
-        private float mShieldBreakUntil = -1f;
+        private float mShieldBreakUntil = -1f; // 破盾提示的 Time.time 截止时刻，-1 表示无待结束提示。
 
-        public IArchitecture GetArchitecture() => GameArchitecture.Interface;
+        // 作用：提供 HUD 访问模型、系统和事件所用的架构；返回：游戏架构接口。
+        public IArchitecture GetArchitecture() => GameArchitecture.Interface; // 直接返回共享架构入口。
 
-        /// <summary>
-        /// 面板实例创建时执行一次：订阅血量、护盾、武器、波次、经济数据并做初始刷新。
-        /// </summary>
+        // 作用：初始化 HUD 数据、各显示区域的订阅及按钮；返回：无返回值。
         protected override void OnInit(IUIData uiData = null)
         {
+            // 按依赖顺序完成初始化；各模型与事件订阅随 HUD 对象销毁自动注销。
             mData = uiData as GameHUDData ?? new GameHUDData();
 
             // 第一步：订阅血量数据刷新血条。
@@ -95,14 +84,12 @@ namespace Game.UI
             InitSafeLootButton();
         }
 
-        /// <summary>
-        /// 订阅玩家血量与上限，变化时刷新血条。
-        /// </summary>
+        // 作用：订阅并缓存玩家生命值与上限以刷新血条；返回：无返回值。
         private void InitHpBar()
         {
             var model = this.GetModel<IPlayerModel>();
 
-            // RegisterWithInitValue 会先用当前值回调一次，之后每次 HP 变化都会再次回调。
+            // 两个订阅都先回调当前值，各自更新缓存后用最新缓存组合刷新血条。
             model.HP.RegisterWithInitValue(hp =>
                 {
                     mCurrentHp = hp;
@@ -119,10 +106,7 @@ namespace Game.UI
                 .UnRegisterWhenGameObjectDestroyed(gameObject);
         }
 
-        /// <summary>
-        /// 初始化武器格子：设置编号与武器名、隐藏没有武器的空格、
-        /// 订阅切换/弹量/耐久/报废事件并用当前武器状态完成初始刷新。
-        /// </summary>
+        // 作用：初始化武器格子和显示缓存并订阅武器事件；返回：无返回值。
         private void InitWeaponSlots()
         {
             // 把 Designer 绑定的九个格子组织成数组，便于按槽位下标访问。
@@ -147,12 +131,12 @@ namespace Game.UI
                 }
                 else
                 {
-                    // 当前只有手枪+机枪两把，多余的格子隐藏；将来获得新武器时需要额外逻辑重新显示。
+                    // 空槽先隐藏，后续新增武器由 OnWeaponAdded 初始化并重新显示对应格子。
                     mSlots[i].gameObject.SetActive(false);
                 }
             }
 
-            // 监听"切换武器"事件，用于更新格子高亮。
+            // 各武器事件随 HUD 对象销毁注销；切换事件只更新选中高亮。
             this.RegisterEvent<WeaponSwitchedEvent>(OnWeaponSwitched)
                 .UnRegisterWhenGameObjectDestroyed(gameObject);
 
@@ -176,6 +160,7 @@ namespace Game.UI
                 })
                 .UnRegisterWhenGameObjectDestroyed(gameObject);
 
+            // 新增武器时补齐槽位展示并使弹量缓存失效。
             this.RegisterEvent<WeaponAddedEvent>(OnWeaponAdded)
                 .UnRegisterWhenGameObjectDestroyed(gameObject);
 
@@ -183,12 +168,11 @@ namespace Game.UI
             OnWeaponSwitched(new WeaponSwitchedEvent { SlotIndex = mWeaponSystem.CurrentIndex });
         }
 
-        /// <summary>
-        /// 订阅掉落倍率与本局金币；缓存刷怪系统供 Update 轮询波次倒计时与预告。
-        /// </summary>
+        // 作用：缓存波次系统并订阅安全拾取、掉落倍率与本局金币；返回：无返回值。
         private void InitWaveAndEconomy()
         {
             mEnemySpawnSystem = this.GetSystem<IEnemySpawnSystem>();
+            // 只在进入安全拾取时替换波次文案，同时阻止无下一波的轮询分支覆盖提示。
             this.GetModel<IGameStateModel>().State.Register(state =>
                 {
                     if (state != GameState.SafeLoot) return;
@@ -213,14 +197,12 @@ namespace Game.UI
                 .UnRegisterWhenGameObjectDestroyed(gameObject);
         }
 
-        /// <summary>
-        /// 初始化子弹库存显示：订阅库存变化与缺弹事件，并立即全量刷新一次。
-        /// </summary>
+        // 作用：初始化库存文本并订阅库存变化和缺弹提示事件；返回：无返回值。
         private void InitAmmoInventory()
         {
             mBulletInventory = this.GetModel<IBulletInventoryModel>();
 
-            // 任何一桶库存变化都全量刷新（三行文本重建成本极低，事件频率低）。
+            // 任一口径或等级的库存变化都重建全部库存行，订阅在对象销毁时自动注销。
             this.RegisterEvent<BulletInventoryChangedEvent>(_ => RefreshAmmoInventory())
                 .UnRegisterWhenGameObjectDestroyed(gameObject);
 
@@ -238,44 +220,40 @@ namespace Game.UI
                 .UnRegisterWhenGameObjectDestroyed(gameObject);
         }
 
-        /// <summary>
-        /// 每帧轮询：波次倒计时与预告、各槽弹量/换弹状态、缺弹提示的自动隐藏。
-        /// 这三类数据来自系统只读属性或计时器，不适合事件驱动，故统一轮询。
-        /// </summary>
+        // 作用：每帧更新波次、武器展示及限时提示；返回：无返回值。
         private void Update()
         {
+            // 先刷新系统状态对应的展示，再检查缺弹与破盾提示的截止时间。
             RefreshWaveCountdown();
             RefreshWeaponSlots();
             HideShortageIfDue();
             UpdateShieldBreakFlash();
         }
 
-        /// <summary>
-        /// 订阅护盾等级/当前值/上限并刷新护盾条；监听破盾事件触发短暂"破盾！"提示。
-        /// 护盾等级 0（未装备）时整条隐藏；破盾后等级保留、容量归零，条保持可见显示空盾。
-        /// </summary>
+        // 作用：订阅护盾数据和破盾事件以驱动护盾条；返回：无返回值。
         private void InitShieldBar()
         {
             var model = this.GetModel<IPlayerModel>();
+            // 各属性订阅立即用当前模型刷新，所有订阅均绑定对象销毁时注销。
             model.ShieldLevel.RegisterWithInitValue(_ => RefreshShieldBar()).UnRegisterWhenGameObjectDestroyed(gameObject);
             model.Shield.RegisterWithInitValue(_ => RefreshShieldBar()).UnRegisterWhenGameObjectDestroyed(gameObject);
             model.MaxShield.RegisterWithInitValue(_ => RefreshShieldBar()).UnRegisterWhenGameObjectDestroyed(gameObject);
             this.RegisterEvent<PlayerShieldBrokenEvent>(_ =>
             {
+                // 破盾时重置提示期限并立即显示，期限结束由 Update 恢复常规文本。
                 mShieldBreakUntil = Time.time + ShieldBreakFlashSeconds;
                 RefreshShieldBar();
             }).UnRegisterWhenGameObjectDestroyed(gameObject);
         }
 
-        /// <summary>
-        /// 按当前护盾模型刷新护盾条显隐、填充与文本；破盾闪烁期间文本显示"破盾！"。
-        /// </summary>
+        // 作用：按护盾模型刷新显隐、填充比例及提示文本；返回：无返回值。
         private void RefreshShieldBar()
         {
             var model = this.GetModel<IPlayerModel>();
             var level = model.ShieldLevel.Value;
             var current = model.Shield.Value;
             var max = model.MaxShield.Value;
+            // 有等级且容量上限有效才显示；当前护盾归零不单独隐藏护盾条。
             var show = level > 0 && max > 0f;
             if (ShieldBar.gameObject.activeSelf != show)
             {
@@ -286,6 +264,7 @@ namespace Game.UI
                 return;
             }
             ShieldFill.fillAmount = max > 0f ? Mathf.Clamp01(current / max) : 0f;
+            // 提示期限内优先显示破盾警示，过期后恢复等级、容量与常规颜色。
             if (Time.time < mShieldBreakUntil)
             {
                 ShieldText.text = "破盾！";
@@ -298,11 +277,10 @@ namespace Game.UI
             }
         }
 
-        /// <summary>
-        /// 破盾闪烁结束后恢复正常护盾文本；由 Update 每帧检查。
-        /// </summary>
+        // 作用：检查破盾提示期限并在到期后恢复常规护盾文本；返回：无返回值。
         private void UpdateShieldBreakFlash()
         {
+            // 仅处理已设置且到期的提示，清除期限后刷新一次，避免后续帧重复恢复。
             if (mShieldBreakUntil > 0f && Time.time >= mShieldBreakUntil)
             {
                 mShieldBreakUntil = -1f;
@@ -310,13 +288,12 @@ namespace Game.UI
             }
         }
 
-        /// <summary>
-        /// 结算按钮：点击进入结算（GameRoot.CompleteSafeLoot 内有 SafeLoot 状态门控）；
-        /// 仅在 SafeLoot 状态显示，其余状态隐藏。
-        /// </summary>
+        // 作用：绑定安全拾取结算按钮并使其显隐跟随游戏状态；返回：无返回值。
         private void InitSafeLootButton()
         {
+            // 点击委托 GameRoot 处理结算，实际结算还由其检查 SafeLoot 状态。
             SafeLootButton.onClick.AddListener(GameRoot.CompleteSafeLoot);
+            // 订阅时立即同步显隐，只有安全拾取阶段可见；对象销毁时自动注销订阅。
             this.GetModel<IGameStateModel>().State.RegisterWithInitValue(state =>
             {
                 var show = state == GameState.SafeLoot;
@@ -327,10 +304,7 @@ namespace Game.UI
             }).UnRegisterWhenGameObjectDestroyed(gameObject);
         }
 
-        /// <summary>
-        /// 刷新波次倒计时与预告文本。无下一波时显示"最终波"；有下一波时按整秒刷新倒计时，
-        /// 预告内容只在波次切换时重建。
-        /// </summary>
+        // 作用：按整秒和波次缓存刷新倒计时与敌人预告；返回：无返回值。
         private void RefreshWaveCountdown()
         {
             var countdown = mEnemySpawnSystem.NextWaveCountdown;
@@ -364,13 +338,11 @@ namespace Game.UI
             }
         }
 
-        /// <summary>
-        /// 刷新各武器格子的弹量文本与换弹遮罩：逐槽读取枪械状态，
-        /// 与缓存比对，任一要素变化才重建文本并切换遮罩。
-        /// </summary>
+        // 作用：比较枪械状态缓存并刷新变化槽位的弹量文本与换弹遮罩；返回：无返回值。
         private void RefreshWeaponSlots()
         {
             var weapons = mWeaponSystem.Weapons;
+            // 仅遍历武器列表与界面格子共同覆盖的范围。
             var count = Mathf.Min(mSlots.Length, weapons.Count);
 
             for (var i = 0; i < count; i++)
@@ -397,11 +369,10 @@ namespace Game.UI
             }
         }
 
-        /// <summary>
-        /// 缺弹提示到时自动隐藏。
-        /// </summary>
+        // 作用：在缺弹提示到期且仍显示时隐藏提示；返回：无返回值。
         private void HideShortageIfDue()
         {
+            // 同时检查期限与激活状态，隐藏后清除定时标记。
             if (mShortageHideTime > 0f && Time.time >= mShortageHideTime && AmmoShortageText.gameObject.activeSelf)
             {
                 AmmoShortageText.gameObject.SetActive(false);
@@ -409,12 +380,10 @@ namespace Game.UI
             }
         }
 
-        /// <summary>
-        /// 重建子弹库存文本：三口径各一行，行内为 0~5 级库存数量（/ 分隔）。
-        /// 低频刷新（库存变化事件触发），字符串直接累加即可。
-        /// </summary>
+        // 作用：重建各口径按等级排列的子弹库存文本；返回：无返回值。
         private void RefreshAmmoInventory()
         {
+            // 按口径分行、等级用斜杠分隔，完整拼接后一次性赋给文本控件。
             var text = "";
 
             // 口径显示顺序固定 S/AR/L，与 Caliber 枚举声明顺序一致。
@@ -433,9 +402,11 @@ namespace Game.UI
             AmmoInventoryText.text = text;
         }
 
+        // 作用：按敌人名称和护盾等级汇总波次预告；返回：分行预告文本，无生成组时返回空字符串。
         private static string BuildPreviewText(IReadOnlyList<SpawnGroup> groups)
         {
             if (groups == null || groups.Count == 0) return "";
+            // 名称列表保留首次出现顺序，内层有序字典按护盾等级累计同名敌人数量。
             var names = new List<string>();
             var counts = new Dictionary<string, SortedDictionary<int, int>>();
             foreach (var group in groups)
@@ -450,6 +421,7 @@ namespace Game.UI
                 shields.TryGetValue(group.ShieldLevel, out var count);
                 shields[group.ShieldLevel] = count + group.Count;
             }
+            // 每个名称输出一行，行内按护盾等级升序列出数量，零级使用无盾文案。
             var rows = new List<string>();
             foreach (var name in names)
             {
@@ -461,22 +433,17 @@ namespace Game.UI
             return string.Join("\n", rows);
         }
 
-        /// <summary>
-        /// 切换武器时刷新格子高亮：当前选中格用亮色，其余恢复深色。
-        /// </summary>
-        /// <param name="e">携带当前选中槽位下标的事件数据。</param>
+        // 作用：根据武器切换事件更新所有格子的选中高亮；返回：无返回值。
         private void OnWeaponSwitched(WeaponSwitchedEvent e)
         {
+            // 逐格与当前槽位比较，同时选中目标并取消其他格子的高亮。
             for (var i = 0; i < mSlots.Length; i++)
             {
                 mSlots[i].SetSelected(i == e.SlotIndex);
             }
         }
 
-        /// <summary>
-        /// 武器资源变化时刷新对应格子的资源条比例。
-        /// </summary>
-        /// <param name="e">携带槽位下标与当前/最大资源值的事件数据。</param>
+        // 作用：根据武器资源变化事件刷新对应格子的资源条；返回：无返回值。
         private void OnResourceChanged(WeaponResourceChangedEvent e)
         {
             // 槽位下标越界时直接忽略（格子数量可能比武器少）。
@@ -485,8 +452,10 @@ namespace Game.UI
             mSlots[e.SlotIndex].SetResource(e.Current, e.Max);
         }
 
+        // 作用：在新增武器时初始化并显示对应槽位；返回：无返回值。
         private void OnWeaponAdded(WeaponAddedEvent e)
         {
+            // 按事件下标读取武器与界面格子，先同步基础显示和选中状态再激活。
             var weapon = mWeaponSystem.Weapons[e.SlotIndex];
             var slot = mSlots[e.SlotIndex];
             slot.Setup(e.SlotIndex, weapon.Name);
@@ -494,33 +463,44 @@ namespace Game.UI
             slot.SetDurability(weapon.Durability, weapon.DurabilityMax);
             slot.SetSelected(e.SlotIndex == mWeaponSystem.CurrentIndex);
             slot.gameObject.SetActive(true);
+            // 使弹量缓存失效，立即刷新以免复用槽位时保留旧武器文本或换弹遮罩。
             mSlotAmmoCache[e.SlotIndex].Resource = -1;
             RefreshWeaponSlots();
         }
 
+        // 作用：接收 HUD 打开回调；返回：无返回值。
         protected override void OnOpen(IUIData uiData = null)
         {
+            // 展示初始化在 OnInit 完成，后续由订阅和 Update 更新，此处不重复初始化。
         }
 
+        // 作用：接收 HUD 显示回调；返回：无返回值。
         protected override void OnShow()
         {
+            // 已有订阅和轮询负责展示更新，显示时不重复注册。
         }
 
+        // 作用：接收 HUD 隐藏回调；返回：无返回值。
         protected override void OnHide()
         {
+            // 隐藏时保留订阅与缓存，不在此解除对象生命周期内的绑定。
         }
 
+        // 作用：接收 HUD 关闭回调；返回：无返回值。
         protected override void OnClose()
         {
+            // 订阅已绑定对象销毁时自动注销，关闭回调不手动重复注销。
         }
 
+        // 作用：按缓存生命值刷新血条宽度与数值文本；返回：无返回值。
         private void RefreshHpBar()
         {
             if (HpFill == null) return;
 
+            // 上限无效时按空血条处理，否则将比例限制在零到一之间。
             var ratio = mCurrentMaxHp > 0 ? Mathf.Clamp01((float)mCurrentHp / mCurrentMaxHp) : 0f;
 
-            // 修改右侧锚点来表现比例：ratio=1 时铺满，ratio=0 时宽度为 0。
+            // 通过右侧锚点表现比例并清零边距：ratio=1 时铺满，ratio=0 时宽度为 0。
             var rect = HpFill.rectTransform;
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = new Vector2(ratio, 1f);

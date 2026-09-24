@@ -8,20 +8,15 @@ namespace Game.UI
     /// </summary>
     public class ResultPanelData : UIPanelData
     {
-        // Victory：true 为通关胜利，false 为死亡失败。
-        public bool Victory;
+        public bool Victory; // 本局胜负：true 表示通关胜利，false 表示失败。
 
-        // Kills：本局击杀总数。
-        public int Kills;
+        public int Kills; // 本局击杀总数。
 
-        // DropGold：本局掉落入账（RunGold 统计）。
-        public int DropGold;
+        public int DropGold; // 本局掉落入账金币，由 RunGold 统计。
 
-        // ClearBonus：通关奖励（胜 500 / 败 0）。
-        public int ClearBonus;
+        public int ClearBonus; // 本局结算的通关奖励金币。
 
-        // GoldEarned：本局结算获得的金币合计（DropGold + ClearBonus）。
-        public int GoldEarned;
+        public int GoldEarned; // 本局所得金币合计，即掉落金币与通关奖励之和。
     }
 
     /// <summary>
@@ -30,21 +25,23 @@ namespace Game.UI
     /// </summary>
     public partial class ResultPanel : UIPanel, IController
     {
-        public IArchitecture GetArchitecture() => GameArchitecture.Interface;
+        // 作用：提供读取结算后经济数据所用的架构；返回：游戏架构接口。
+        public IArchitecture GetArchitecture() => GameArchitecture.Interface; // 直接返回共享架构入口。
 
+        // 作用：初始化结算数据并绑定返回主菜单操作；返回：无返回值。
         protected override void OnInit(IUIData uiData = null)
         {
+            // 优先接收本局战绩，缺少有效数据时使用默认值。
             mData = uiData as ResultPanelData ?? new ResultPanelData();
 
             // 返回主菜单：恢复时间流速、关闭战斗面板、加载主菜单场景。
             MenuButton.onClick.AddListener(GameRoot.ReturnToMainMenu);
         }
 
-        /// <summary>
-        /// 每次打开时按本局战绩刷新显示。
-        /// </summary>
+        // 作用：每次打开时刷新本局战绩和累计金币；返回：无返回值。
         protected override void OnOpen(IUIData uiData = null)
         {
+            // 先根据面板保存的结算数据显示胜负、击杀数和本局金币组成。
             Title.text = Data.Victory ? "胜利！" : "失败……";
             KillText.text = $"击杀数：{Data.Kills}";
             GoldText.text = $"金币：掉落 {Data.DropGold} + 通关奖励 {Data.ClearBonus} = {Data.GoldEarned}";
@@ -53,16 +50,22 @@ namespace Game.UI
             TotalGoldText.text = $"总金币：{this.GetModel<IEconomyModel>().Gold.Value}";
         }
 
+        // 作用：接收结算面板显示回调；返回：无返回值。
         protected override void OnShow()
         {
+            // 战绩已在 OnOpen 刷新，显示时无需重复赋值。
         }
 
+        // 作用：接收结算面板隐藏回调；返回：无返回值。
         protected override void OnHide()
         {
+            // 结算展示没有需在隐藏时暂停的内部流程。
         }
 
+        // 作用：接收结算面板关闭回调；返回：无返回值。
         protected override void OnClose()
         {
+            // 返回菜单由按钮委托 GameRoot 执行，此处不重复触发。
         }
     }
 }
